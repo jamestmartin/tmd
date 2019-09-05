@@ -1,0 +1,61 @@
+name:                tmd
+version:             0.0.0.0
+github:              "jamestmartin/tmd"
+license:             AGPL-3
+author:              "James Martin"
+maintainer:          "james@jtmar.me"
+copyright:           "Copyright: (C) 2019 James Martin"
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/jamestmartin/tmd#readme>
+
+default-extensions:
+- BlockArguments
+- DataKinds
+- FlexibleContexts
+- FlexibleInstances
+- GADTs
+- KindSignatures
+- LambdaCase
+- OverloadedStrings
+- Rank2Types
+
+dependencies:
+- aeson >= 1.4 && < 2
+- base >= 4.7 && < 5
+- bytestring >= 0.10.8 && < 0.11
+- cereal >= 0.5.8 && < 0.6
+- free >= 5.1 && < 6
+- mtl >= 2.2 && < 3
+- network >= 2.8 && < 4
+# Used to deserialize JSON to integers
+- scientific >= 0.3.6 && < 0.4
+- text >= 1.2 && < 2
+# Used to serialize JSON objects
+- unordered-containers >= 0.2.10 && < 0.3
+- uuid >= 1.3 && < 2
+# Used to serialize JSON arrays
+- vector >= 0.12 && < 0.13
+
+library:
+  source-dirs: src
+
+executables:
+  tmd-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - tmd
