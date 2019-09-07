@@ -1,21 +1,33 @@
+{-# LANGUAGE UndecidableInstances #-}
 module Minecraft.Protocol.State where
 
-import Data.Serialize (Serialize, get, put)
-import Data.Serialize.Get (getWord8)
-import Data.Serialize.Put (putWord8)
+import Control.Category.Free (Cat (Id, (:.:)))
+import Data.ByteString.Builder (word8)
+import Data.Exists (Exists (Exists))
+import Minecraft.Protocol.DataTypes (Serialize, Deserialize, serialize, deserialize, anyWord8)
 
-data ProtocolState = Handshake
-                   | Status
-                   | Login
-                   | Play
-                   | Closed
+-- | The packets that the client and server may send and recieve
+-- are dependent on the protocol state.
+-- Each protocol state uses a separate set of packet IDs.
+--
+-- Other sources, like wiki.vg, may refer to this as the connection state.
+-- I refer to it as the protocol state to distinguish it
+-- from the state of the connection as a whole,
+-- which may include information about the player,
+-- compression and encryption state, and so forth.
+data ProtocolState
+  -- | The initial state of a new connection.
+  = Handshake
+  -- | The client is querying the server status, but not joining the game.
+  | Status
+  -- | Logging in and initializing protocol state (compression and encryption).
+  | Login
+  -- | The standard gameplay protocol state after login.
+  | Play
+  -- | The connection is closed. No more packets will be sent or recieved.
+  | Closed
 
-data ProtocolStateTransition :: ProtocolState -> * where
-  PSTStatus :: ProtocolStateTransition 'Handshake
-  PSTLogin  :: ProtocolStateTransition 'Handshake
-  PSTPlay   :: ProtocolStateTransition 'Login
-  PSTClose  :: ProtocolStateTransition a
-
+-- | A ProtocolState available as both a type and a value.
 data SProtocolState :: ProtocolState -> * where
   SHandshake :: SProtocolState 'Handshake
   SStatus    :: SProtocolState 'Status
@@ -30,7 +42,9 @@ protocolState SLogin     = Login
 protocolState SPlay      = Play
 protocolState SClosed    = Closed
 
+-- | An implicitly-passed protocol state.
 class SProtocolStateI (st :: ProtocolState) where
+  -- | Retrieve the known value of the protocol state singleton.
   sProtocolState :: SProtocolState st
 
 instance SProtocolStateI 'Handshake where
@@ -48,6 +62,7 @@ instance SProtocolStateI 'Play where
 instance SProtocolStateI 'Closed where
   sProtocolState = SClosed
 
+-- | Explicitly specify an implicitly-passed protocol state.
 rProtocolState :: SProtocolState st -> (SProtocolStateI st => t) -> t
 rProtocolState SHandshake x = x
 rProtocolState SStatus    x = x
@@ -55,21 +70,62 @@ rProtocolState SLogin     x = x
 rProtocolState SPlay      x = x
 rProtocolState SClosed    x = x
 
-instance Enum (ProtocolStateTransition 'Handshake) where
-  toEnum 0 = PSTClose
-  toEnum 1 = PSTStatus
-  toEnum 2 = PSTLogin
-  toEnum n = error $ "Invalid PST enum: " ++ show n
-  
-  fromEnum PSTClose  = 0
-  fromEnum PSTStatus = 1
-  fromEnum PSTLogin  = 2
+-- | The valid protocol state transitions.
+data ProtocolStateTransition
+  -- | A transition from this state ...
+  :: ProtocolState
+  -- | ... to this one.
+  -> ProtocolState
+  -> * where
+  HandshakeStatus :: ProtocolStateTransition 'Handshake 'Status
+  HandshakeLogin  :: ProtocolStateTransition 'Handshake 'Login
+  LoginPlay       :: ProtocolStateTransition 'Login     'Play
+  CloseConnection :: ProtocolStateTransition a          'Closed
 
-instance Serialize (ProtocolStateTransition 'Handshake) where
-  get = getWord8 >>= \case
-    0 -> return PSTClose
-    1 -> return PSTStatus
-    2 -> return PSTLogin
+class ProtocolStateTransitionI (to :: ProtocolState) (from :: ProtocolState) where
+  protocolStateTransition :: ProtocolStateTransition to from
+
+instance ProtocolStateTransitionI 'Handshake 'Status where
+  protocolStateTransition = HandshakeStatus
+
+instance ProtocolStateTransitionI 'Handshake 'Login where
+  protocolStateTransition = HandshakeLogin
+
+instance ProtocolStateTransitionI 'Login 'Play where
+  protocolStateTransition = LoginPlay
+
+instance ProtocolStateTransitionI a 'Closed where
+  protocolStateTransition = CloseConnection
+
+rProtocolStateTransition :: ProtocolStateTransition st st' -> (ProtocolStateTransitionI st st' => a) -> a
+rProtocolStateTransition HandshakeStatus x = x
+rProtocolStateTransition HandshakeLogin  x = x
+rProtocolStateTransition LoginPlay       x = x
+rProtocolStateTransition CloseConnection x = x
+
+nextState :: ProtocolStateTransition st st' -> SProtocolState st'
+nextState HandshakeStatus = SStatus
+nextState HandshakeLogin  = SLogin
+nextState LoginPlay       = SPlay
+nextState CloseConnection = SClosed
+
+instance Enum (Exists (ProtocolStateTransition 'Handshake)) where
+  toEnum 0 = Exists $ CloseConnection
+  toEnum 1 = Exists $ HandshakeStatus
+  toEnum 2 = Exists $ HandshakeLogin
+  toEnum n = Exists $ error $ "Invalid transition from handshake: " ++ show n
+  
+  fromEnum (Exists t) = case t of
+    CloseConnection -> 0
+    HandshakeStatus -> 1
+    HandshakeLogin  -> 2
+
+instance Deserialize (Exists (ProtocolStateTransition 'Handshake)) where
+  deserialize = anyWord8 >>= \case
+    0 -> return $ Exists CloseConnection
+    1 -> return $ Exists HandshakeStatus
+    2 -> return $ Exists HandshakeLogin
     n -> fail $ "Invalid next state: " ++ show n
 
-  put = putWord8 . fromIntegral . fromEnum
+instance Serialize (Exists (ProtocolStateTransition 'Handshake)) where
+  serialize = word8 . fromIntegral . fromEnum

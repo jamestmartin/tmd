@@ -6,12 +6,14 @@ import Control.Monad.Except (MonadError, ExceptT, throwError, runExceptT)
 import Control.Monad.Reader (MonadReader, ReaderT, runReaderT, ask)
 import Control.Monad.State (MonadState, StateT, evalStateT, MonadIO, liftIO)
 import qualified Control.Monad.State as St
+import Data.Attoparsec.Zepto
 import Data.Bits ((.|.), testBit, clearBit, shiftL)
 import Data.ByteString (ByteString)
+import Data.ByteString.Builder
 import qualified Data.ByteString as BS
-import Data.Serialize
+import Data.ByteString.Lazy (toStrict)
 import Data.Word (Word8)
-import Minecraft.Protocol.DataTypes (VarInt (VarInt))
+import Minecraft.Protocol.DataTypes
 import Network.Socket (Socket)
 import Network.Socket.ByteString (recv, sendMany)
 
@@ -43,16 +45,16 @@ nextVarInt = do
 readBytes :: Socket -> ByteReaderStack a -> IO (Either String a)
 readBytes conn = flip runReaderT conn . flip evalStateT BS.empty . runExceptT
 
-nextPacket :: (ByteReader r, Serialize a, MonadIO r) => r a
+nextPacket :: (ByteReader r, Deserialize a, MonadIO r) => r a
 nextPacket = do
   len <- nextVarInt
-  packet <- runGet (isolate len get) <$> BS.pack <$> replicateM len nextByte
+  packet <- parse deserialize <$> BS.pack <$> replicateM len nextByte
   case packet of
     Left err -> throwError err
     Right x -> return x
 
-writePacket :: (MonadIO m, MonadReader Socket m) => Put -> m ()
+writePacket :: (MonadIO m, MonadReader Socket m, Serialize s) => s -> m ()
 writePacket packet = do
   conn <- ask
-  liftIO $ sendMany conn [runPut $ put $ VarInt $ BS.length bytes, bytes]
-  where bytes = runPut packet
+  liftIO $ sendMany conn $ [toStrict $ toLazyByteString $ serialize $ VarInt $ BS.length bytes, bytes]
+  where bytes = toStrict $ toLazyByteString $ serialize packet

@@ -4,18 +4,16 @@ import Data.Aeson (ToJSON, toJSON, FromJSON, parseJSON)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as AT
 import qualified Data.ByteString as BS
+import Data.ByteString.Builder
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.HashMap.Strict as HM
-import Data.Serialize (Serialize, get, put)
-import Data.Serialize.Get (getWord64be)
-import Data.Serialize.Put (putWord64be, putByteString)
 import Data.Text (Text)
 import Data.UUID (UUID)
 import qualified Data.UUID as U
 import Data.Vector (Vector)
 import Data.Word (Word16, Word64)
 import Minecraft.Protocol.DataTypes
-import Minecraft.Protocol.Direction (PacketDirection (Clientbound, Serverbound))
+import Minecraft.Protocol.Direction
 import Minecraft.Protocol.Version
 
 data SamplePlayer = SamplePlayer
@@ -61,12 +59,10 @@ instance ToJSON StatusResponse where
     ]
 
 instance Serialize StatusResponse where
-  put sr = do
-    put $ VarInt $ fromIntegral $ BS.length bytes
-    putByteString bytes
+  serialize sr =
+    serialize (VarInt $ fromIntegral $ BS.length bytes)
+    <> byteString bytes
     where bytes = BSL.toStrict $ A.encode sr
-
-  get = error "not yet implemented: serialize statusresponse"
 
 data PacketStatus :: PacketDirection -> * where
   -- ## request / response
@@ -91,31 +87,32 @@ psId Request      = VarInt 0
 psId (Response _) = VarInt 0
 psId (Ping _)     = VarInt 1
 psId (Pong _)     = VarInt 1
-  
-instance Serialize (PacketStatus 'Clientbound) where
-  get = do
-    VarInt pid <- get
-    case pid of
-      0 -> Response <$> get
-      1 -> Pong <$> getWord64be
-      n -> fail $ "Unknown packet ID for clientbound status: " ++ show n
 
-  put pkt@(Response sr) = do
-    put $ psId pkt
-    put sr
-  put pkt@(Pong payload) = do
-    put $ psId pkt
-    putWord64be payload
+instance SPacketDirectionI dir => Deserialize (PacketStatus dir) where
+  deserialize = a \case
+    {-SClientbound -> do
+      VarInt pid <- deserialize
+      case pid of
+        0 -> Response <$> deserialize
+        1 -> Pong <$> anyWord64be
+        n -> fail $ "Unknown packet ID for clientbound status: " ++ show n-}
+    SServerbound -> do
+      VarInt pid <- deserialize
+      case pid of
+        0 -> return Request
+        1 -> Ping <$> anyWord64be
+        n -> fail $ "Unknown packet ID for serverbound status: " ++ show n
+    where a :: SPacketDirectionI dir => (SPacketDirection dir -> f (g dir)) -> f (g dir)
+          a f = f sPacketDirection
 
-instance Serialize (PacketStatus 'Serverbound) where
-  get = do
-    VarInt pid <- get
-    case pid of
-      0 -> return Request
-      1 -> Ping <$> getWord64be
-      n -> fail $ "Unknown packet ID for serverbound status: " ++ show n
-
-  put pkt@Request = put $ psId pkt
-  put pkt@(Ping payload) = do
-    put $ psId pkt
-    putWord64be payload
+instance Serialize (PacketStatus dir) where
+  serialize pkt@(Response sr) =
+    serialize (psId pkt)
+    <> serialize sr
+  serialize pkt@(Pong payload) =
+    serialize (psId pkt)
+    <> word64BE payload
+  serialize pkt@Request = serialize $ psId pkt
+  serialize pkt@(Ping payload) =
+    serialize (psId pkt)
+    <> word64BE payload

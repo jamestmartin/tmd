@@ -1,31 +1,28 @@
 module Minecraft.Protocol where
 
-import Data.Serialize (Serialize, get, put)
+import Minecraft.Protocol.DataTypes (Serialize, Deserialize, serialize, deserialize)
 import Minecraft.Protocol.Direction
 import Minecraft.Protocol.State
 import Minecraft.Protocol.State.Handshake
+import Minecraft.Protocol.State.Login
 import Minecraft.Protocol.State.Status
 
-data Packet :: ProtocolState -> PacketDirection -> * where
-  PktHandshake :: PacketHandshake dir -> Packet 'Handshake dir
-  PktStatus    :: PacketStatus dir    -> Packet 'Status    dir
+data Packet :: PacketDirection -> ProtocolState -> * where
+  PktHandshake :: PacketHandshake dir -> Packet dir 'Handshake
+  PktStatus    :: PacketStatus dir    -> Packet dir 'Status
+  PktLogin     :: PacketLogin dir     -> Packet dir 'Login
 
-instance Serialize (Packet 'Handshake 'Serverbound) where
-  get = PktHandshake <$> get
-  put (PktHandshake pkt) = put pkt
+instance (SProtocolStateI st, SPacketDirectionI dir) => Deserialize (Packet dir st) where
+  deserialize = a \case
+    SClosed    -> fail  "No packets exist for a closed connection."
+    SHandshake -> PktHandshake <$> deserialize
+    SStatus    -> PktStatus    <$> deserialize
+    SLogin     -> PktLogin     <$> deserialize
+    _          -> undefined
+    where a :: (SProtocolStateI st, SPacketDirectionI dir) => (SProtocolState st -> f (g dir st)) -> f (g dir st)
+          a f = f sProtocolState
 
-instance Serialize (Packet 'Status    'Serverbound) where
-  get = PktStatus <$> get
-  put (PktStatus pkt) = put pkt
-
-instance Serialize (Packet 'Closed    dir) where
-  get   = fail  "No packets exist for a closed connection."
-  put _ = error "No packets exist for a closed connection."
-
-instance Serialize (Packet 'Handshake 'Clientbound) where
-  get = PktHandshake <$> get
-  put (PktHandshake pkt) = put pkt
-
-instance Serialize (Packet 'Status    'Clientbound) where
-  get = PktStatus <$> get
-  put (PktStatus pkt) = put pkt
+instance Serialize (Packet dir st) where
+  serialize (PktHandshake pkt) = serialize pkt
+  serialize (PktStatus pkt) = serialize pkt
+  serialize (PktLogin pkt) = serialize pkt

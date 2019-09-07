@@ -3,16 +3,15 @@ module Minecraft.Protocol.Version where
 import Control.Arrow ((<<<), (>>>))
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import qualified Data.Aeson.Types as AT
+import Data.ByteString.Builder (word8)
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromJust)
 import Data.Scientific (toBoundedInteger)
-import Data.Serialize (Serialize, get, put)
-import Data.Serialize.Put (putWord8)
 import Data.Text (Text)
 import Minecraft.Protocol.DataTypes
 
 data ProtocolVersion = PV498 deriving Show
-newtype AmbProtocolVersion = AmbProtocolVersion { fromAmbProtocolVersion :: Maybe ProtocolVersion }
+newtype AmbProtocolVersion = AmbProtocolVersion { getAmbProtocolVersion :: Maybe ProtocolVersion }
 
 versionName :: ProtocolVersion -> Text
 versionName PV498 = "1.14.4"
@@ -32,15 +31,19 @@ instance Enum ProtocolVersion where
   toEnum   = toEnum                                     >>> fromJust
   fromEnum = (fromEnum :: Maybe ProtocolVersion -> Int) <<< Just
 
-instance Serialize AmbProtocolVersion where
-  get = AmbProtocolVersion <$> do
-    VarInt verNum <- get
+instance Deserialize AmbProtocolVersion where
+  deserialize = AmbProtocolVersion <$> do
+    VarInt verNum <- deserialize
     maybe (fail $ "Unknown protocol version: " ++ show verNum) return $ safeToEnum verNum
-  put = fromAmbProtocolVersion >>> fromEnum >>> fromIntegral >>> putWord8
+
+instance Serialize AmbProtocolVersion where
+  serialize = getAmbProtocolVersion >>> fromEnum >>> fromIntegral >>> word8
+
+instance Deserialize ProtocolVersion where
+  deserialize = deserialize >>= (getAmbProtocolVersion >>> maybe (fail "Must specify protocol version.") return)
 
 instance Serialize ProtocolVersion where
-  get = get >>= (fromAmbProtocolVersion >>> maybe (fail "Must specify protocol version.") return)
-  put = put <<<      AmbProtocolVersion <<< Just
+  serialize = serialize <<< AmbProtocolVersion <<< Just
 
 instance ToJSON ProtocolVersion where
   toJSON pv = AT.Object $ HM.fromList

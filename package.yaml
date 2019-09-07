@@ -20,21 +20,26 @@ description:         Please see the README on GitHub at <https://github.com/jame
 
 default-extensions:
 - BlockArguments
+- ConstraintKinds
 - DataKinds
 - FlexibleContexts
 - FlexibleInstances
 - GADTs
 - KindSignatures
 - LambdaCase
+- MultiParamTypeClasses
 - OverloadedStrings
+- PolyKinds
 - Rank2Types
+- ScopedTypeVariables
 
 dependencies:
 - aeson >= 1.4 && < 2
+- attoparsec >= 0.13.2 && < 0.14
 - base >= 4.7 && < 5
 - bytestring >= 0.10.8 && < 0.11
-- cereal >= 0.5.8 && < 0.6
 - free >= 5.1 && < 6
+- free-category == 0.0.2.0
 - mtl >= 2.2 && < 3
 - network >= 2.8 && < 4
 # Used to deserialize JSON to integers
