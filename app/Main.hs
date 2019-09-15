@@ -56,7 +56,7 @@ runPacketIO = runProgram runPacketIO'
         runPacketIO' ReadPacket        = nextPacket :: r (Packet 'Serverbound st)
         runPacketIO' (WritePacket pkt) = writePacket pkt
         runPacketIO' (Transition _)    = return ()
-
+  
 talk :: forall r. (MonadIO r, ByteReader r) => r ()
 talk = runPacketIO $ talk' SHandshake
   where talk' :: forall (st :: ProtocolState). SProtocolState st -> PacketIO st 'Closed ()

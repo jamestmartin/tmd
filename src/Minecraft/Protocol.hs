@@ -26,3 +26,7 @@ instance Serialize (Packet dir st) where
   serialize (PktHandshake pkt) = serialize pkt
   serialize (PktStatus pkt) = serialize pkt
   serialize (PktLogin pkt) = serialize pkt
+
+class MonadProtocol m where
+  sendPacket :: Packet dir -> m dir ()
+  recvPacket :: SPacketDirectionI dir => m dir Packet
