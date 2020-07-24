@@ -1,15 +1,13 @@
 mod net;
 
+use crate::net::{Reader, Writer};
 use crate::net::chat::Chat;
-use crate::net::source;
-use crate::net::source::{PacketError, PacketSource};
-use tokio::io::BufWriter;
+use crate::net::format::{PacketFormat, DefaultPacketFormat};
+use crate::net::serialize::VecPacketDeserializer;
+use tokio::io::{BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::net::tcp::WriteHalf;
 use std::io;
 use std::net::IpAddr;
-
-use PacketError::*;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -43,8 +41,8 @@ async fn listen(mut listener: TcpListener) {
 }
 
 async fn accept_connection(mut socket: TcpStream) {
-    let (mut read, write) = socket.split();
-    let mut source = PacketSource::new(&mut read);
+    let (read, write) = socket.split();
+    let mut source = BufReader::new(read);
     let mut dest = BufWriter::new(write);
 
     eprintln!("Client connected.");
@@ -54,53 +52,66 @@ async fn accept_connection(mut socket: TcpStream) {
     }
 }
 
-async fn interact_handshake(source: &mut PacketSource<'_>, dest: &mut BufWriter<WriteHalf<'_>>) -> source::Result<()> {
+async fn interact_handshake<'a>(source: &mut Reader<'a>, dest: &mut Writer<'a>) -> io::Result<()> {
     use crate::net::packet::handshake::*;
     use PacketHandshakeServerbound::*;
 
-    match read_packet_handshake(source).await? {
-        Handshake(pkt) => {
-            if pkt.next_state == HandshakeNextState::Status {
-                interact_status(source, dest).await
-            } else {
-                Err(PktError("We do not support client log-in yet.".to_string()))
+    let (id, data) = DefaultPacketFormat.recieve(source).await?;
+    let mut deser = VecPacketDeserializer::new(&data);
+
+    match read_packet_handshake(id, &mut deser)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err)) {
+        Ok(pkt) => match pkt {
+            Handshake(pkt) => {
+                if pkt.next_state == HandshakeNextState::Status {
+                    interact_status(source, dest).await
+                } else {
+                    Err(io::Error::new(io::ErrorKind::Other, "We do not support client log-in yet.".to_string()))
+                }
             }
-        }
+        },
+        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err))
     }
 }
 
-async fn interact_status(source: &mut PacketSource<'_>, dest: &mut BufWriter<WriteHalf<'_>>) -> source::Result<()> {
+async fn interact_status<'a>(source: &mut Reader<'a>, dest: &mut Writer<'a>) -> io::Result<()> {
     use crate::net::packet::status::*;
     use PacketStatusClientbound::*;
     use PacketStatusServerbound::*;
 
     loop {
-        match read_packet_status(source).await? {
-            Request => {
-                match write_packet_status(dest, Response(PacketResponse {
-                    version: PacketResponseVersion {
-                        name: "1.16.1".to_string(),
-                        protocol: 736,
-                    },
-                    players: PacketResponsePlayers {
-                        max: 255,
-                        online: 0,
-                        sample: Vec::new(),
-                    },
-                    description: Chat { text: "Hello, world!".to_string() },
-                    favicon: None,
-                })).await {
-                    Ok(_) => {},
-                    Err(err) => return Err(IoError(err))
+        let (id, data) = DefaultPacketFormat.recieve(source).await?;
+        let mut deser = VecPacketDeserializer::new(&data);
+
+        match read_packet_status(id, &mut deser)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err)) {
+            Ok(pkt) => match pkt {
+                Request => {
+                    let mut buf = Vec::new();
+                    let id = write_packet_status(&mut buf, Response(PacketResponse {
+                        version: PacketResponseVersion {
+                            name: "1.16.1".to_string(),
+                            protocol: 736,
+                        },
+                        players: PacketResponsePlayers {
+                            max: 255,
+                            online: 0,
+                            sample: Vec::new(),
+                        },
+                        description: Chat { text: "Hello, world!".to_string() },
+                        favicon: None,
+                    }));
+                    DefaultPacketFormat.send(dest, id, buf.as_slice()).await?;
+                },
+                Ping(payload) => {
+                    let mut buf = Vec::new();
+                    let id = write_packet_status(&mut buf, Pong(payload));
+                    DefaultPacketFormat.send(dest, id, buf.as_slice()).await?;
+
+                    return Ok(());
                 }
             },
-            Ping(payload) => {
-                match write_packet_status(dest, Pong(payload)).await {
-                    Ok(_) => {},
-                    Err(err) => return Err(IoError(err))
-                }
-                return Ok(());
-            }
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err))
         }
     }
 }

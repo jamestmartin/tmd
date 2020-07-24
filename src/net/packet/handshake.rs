@@ -1,5 +1,4 @@
-use crate::net::source::{PacketError, PacketSource, Result};
-use PacketError::PktError;
+use crate::net::serialize::PacketDeserializer;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum HandshakeNextState {
@@ -20,21 +19,21 @@ pub enum PacketHandshakeServerbound {
     Handshake(PacketHandshake),
 }
 
-pub async fn read_packet_handshake(source: &mut PacketSource<'_>) -> Result<PacketHandshakeServerbound> {
+pub fn read_packet_handshake(id: i32, deser: &mut impl PacketDeserializer)
+        -> Result<PacketHandshakeServerbound, String> {
     use PacketHandshakeServerbound::*;
 
-    let _length = source.read_varint().await?;
-    let id = source.read_varint().await?;
     match id {
         0x00 => {
-            let protocol_version = source.read_varint().await?;
-            let server_address = source.read_string().await?;
-            let server_port = source.read_u16().await?;
-            let next_state = match source.read_varint().await? {
+            let protocol_version = deser.read_varint()?;
+            let server_address = deser.read_string()?;
+            let server_port = deser.read_u16()?;
+            let next_state = match deser.read_varint()? {
                 1 => HandshakeNextState::Status,
                 2 => HandshakeNextState::Login,
-                n => return Err(PktError(format!("Invalid next protocol state in handshake: {}", n)))
+                n => return Err(format!("Invalid next protocol state in handshake: {}", n))
             };
+            deser.read_eof()?;
             Ok(Handshake(PacketHandshake {
                 protocol_version: protocol_version,
                 server_address: server_address,
@@ -42,6 +41,6 @@ pub async fn read_packet_handshake(source: &mut PacketSource<'_>) -> Result<Pack
                 next_state: next_state,
             }))
         },
-        id => Err(PktError(format!("Invalid handshake packet id: {}", id)))
+        id => Err(format!("Invalid handshake packet id: {}", id))
     }
 }
