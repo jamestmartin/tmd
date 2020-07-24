@@ -1,0 +1,9 @@
+name: TMD
+version: "1.0"
+author: James Martin
+about: A Minecraft protocol-compatible server written in Rust.
+args:
+  - host:
+      help: The IP address the server will use to listen for connections. Defaults to any address (`::`).
+  - port:
+      help: The port the server will accept connections from. Defaults to 25565.
