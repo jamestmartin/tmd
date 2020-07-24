@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use crate::net::{Reader, Writer};
 use std::boxed::Box;
 use std::io;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 
 #[async_trait]
 pub trait PacketFormat {
@@ -35,19 +35,23 @@ async fn read_varint<'rr, 'r>(src: &'rr mut Reader<'r>) -> io::Result<(usize, i3
 #[async_trait]
 impl PacketFormat for DefaultPacketFormat {
     async fn send<'wr, 'w>(&self, dest: &'wr mut Writer<'w>, packet_id: i32, data: &[u8]) -> io::Result<()> {
-        use crate::net::serialize::PacketSerializer;
+        use crate::net::serialize::{PacketSerializer, VarInt};
 
         let mut packet_id_buf = Vec::with_capacity(5);
-        packet_id_buf.write_varint(packet_id);
+        packet_id_buf.write(VarInt(packet_id));
 
         let packet_length = packet_id_buf.len() + data.len();
         let mut packet_length_buf = Vec::with_capacity(5);
-        packet_length_buf.write_varint(packet_length as i32);
+        packet_length_buf.write(VarInt(packet_length as i32));
 
-        dest.write(packet_length_buf.as_slice()).await?;
-        dest.write(packet_id_buf.as_slice()).await?;
-        dest.write(data).await?;
-        dest.flush().await?;
+        {
+            use tokio::io::AsyncWriteExt;
+
+            dest.write(packet_length_buf.as_slice()).await?;
+            dest.write(packet_id_buf.as_slice()).await?;
+            dest.write(data).await?;
+            dest.flush().await?;
+        }
 
         Ok(())
     }

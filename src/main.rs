@@ -1,3 +1,5 @@
+#![feature(const_generics)]
+
 mod net;
 
 use crate::net::{Reader, Writer};
