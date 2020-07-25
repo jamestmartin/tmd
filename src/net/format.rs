@@ -1,13 +1,14 @@
 use async_trait::async_trait;
 use crate::net::{Reader, Writer};
+use crate::net::state::ProtocolState;
 use std::boxed::Box;
 use std::io;
 use tokio::io::AsyncReadExt;
 
 #[async_trait]
 pub trait PacketFormat {
-    async fn send<'wr, 'w>(&self, dest: &'wr mut Writer<'w>, packet_id: i32, data: &[u8]) -> io::Result<()>;
-    async fn recieve<'rr, 'r>(&self, src: &'rr mut Reader<'r>) -> io::Result<(i32, Box<[u8]>)>;
+    async fn send<'wr, 'w, P: ProtocolState + Sync>(&self, dest: &'wr mut Writer<'w>, pkt: &P) -> io::Result<()>;
+    async fn recieve<'rr, 'r, P: ProtocolState>(&self, src: &'rr mut Reader<'r>) -> io::Result<P>;
 }
 
 pub const MAX_CLIENT_PACKET_SIZE: usize = 32767;
@@ -34,8 +35,12 @@ async fn read_varint<'rr, 'r>(src: &'rr mut Reader<'r>) -> io::Result<(usize, i3
 
 #[async_trait]
 impl PacketFormat for DefaultPacketFormat {
-    async fn send<'wr, 'w>(&self, dest: &'wr mut Writer<'w>, packet_id: i32, data: &[u8]) -> io::Result<()> {
+    async fn send<'wr, 'w, P: ProtocolState + Sync>(&self, dest: &'wr mut Writer<'w>, pkt: &P) -> io::Result<()> {
         use crate::net::serialize::{PacketSerializer, VarInt};
+
+        let packet_id = pkt.id();
+        let mut data = Vec::new();
+        pkt.write(&mut data);
 
         let mut packet_id_buf = Vec::with_capacity(5);
         packet_id_buf.write(VarInt(packet_id));
@@ -49,14 +54,16 @@ impl PacketFormat for DefaultPacketFormat {
 
             dest.write(packet_length_buf.as_slice()).await?;
             dest.write(packet_id_buf.as_slice()).await?;
-            dest.write(data).await?;
+            dest.write(data.as_slice()).await?;
             dest.flush().await?;
         }
 
         Ok(())
     }
 
-    async fn recieve<'rr, 'r>(&self, src: &'rr mut Reader<'r>) -> io::Result<(i32, Box<[u8]>)> {
+    async fn recieve<'rr, 'r, P: ProtocolState>(&self, src: &'rr mut Reader<'r>) -> io::Result<P> {
+        use crate::net::serialize::VecPacketDeserializer;
+
         let (_, length) = read_varint(src).await?;
         if length > MAX_CLIENT_PACKET_SIZE as i32 {
             return Err(io::Error::new(io::ErrorKind::Other, "Packet was too long."));
@@ -69,6 +76,7 @@ impl PacketFormat for DefaultPacketFormat {
         buf.resize(length - id_length, 0);
         src.read_exact(buf.as_mut_slice()).await?;
 
-        Ok((id, buf.into_boxed_slice()))
+        P::read(id, &mut VecPacketDeserializer::new(&buf))
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
     }
 }

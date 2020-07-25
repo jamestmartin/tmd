@@ -1,81 +1,69 @@
+use crate::{define_packets, define_states};
 use crate::net::chat::Chat;
-use crate::net::serialize::{PacketDeserializer, PacketSerializer, PacketJson};
+use crate::net::serialize::{PacketJson};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct PacketResponseVersion {
+pub struct ResponseVersion {
     pub name: String,
     pub protocol: u32,
 }
-impl PacketJson for PacketResponseVersion {}
+impl PacketJson for ResponseVersion {}
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct PacketResponsePlayersSample {
+pub struct ResponsePlayersSample {
     pub name: String,
     pub id: Uuid,
 }
-impl PacketJson for PacketResponsePlayersSample {}
+impl PacketJson for ResponsePlayersSample {}
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct PacketResponsePlayers {
+pub struct ResponsePlayers {
     pub max: u32,
     pub online: u32,
-    pub sample: Vec<PacketResponsePlayersSample>
+    pub sample: Vec<ResponsePlayersSample>
 }
-impl PacketJson for PacketResponsePlayers {}
+impl PacketJson for ResponsePlayers {}
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct PacketResponse {
-    pub version: PacketResponseVersion,
-    pub players: PacketResponsePlayers,
+pub struct ResponseData {
+    pub version: ResponseVersion,
+    pub players: ResponsePlayers,
     pub description: Chat,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub favicon: Option<String>,
 }
-impl PacketJson for PacketResponse {}
+impl PacketJson for ResponseData {}
 
-pub enum PacketStatusClientbound {
-    Response(PacketResponse),
-    Pong([u8; 8]),
-}
+define_packets! {
+    // Clientbound
 
-#[derive(Debug)]
-pub enum PacketStatusServerbound {
-    Request,
-    Ping([u8; 8]),
-}
+    packet Response {
+        data: ResponseData
+    }
 
-pub fn read_packet_status(id: i32, deser: &mut impl PacketDeserializer)
-        -> Result<PacketStatusServerbound, String> {
-    use PacketStatusServerbound::*;
+    packet Pong {
+        payload: [u8; 8]
+    }
 
-    match id {
-        0 => {
-            deser.read_eof()?;
-            Ok(Request)
-        },
-        1 => {
-            let payload = deser.read::<[u8; 8]>()?;
-            deser.read_eof()?;
-            Ok(Ping(payload))
-        }
-        id => Err(format!("Invalid status packet id: {}", id))
+    // Serverbound
+
+    packet Request { }
+
+    packet Ping {
+        payload: [u8; 8]
     }
 }
 
-pub fn write_packet_status(ser: &mut impl PacketSerializer, packet: PacketStatusClientbound)
-        -> i32 {
-    use PacketStatusClientbound::*;
+define_states! {
+    state StatusClientbound {
+        0x00 => Response,
+        0x01 => Pong
+    }
 
-    match packet {
-        Response(response) => {
-            ser.write(response);
-            0x00
-        },
-        Pong(payload) => {
-            ser.write(payload);
-            0x01
-        }
+    state StatusServerbound {
+        0x00 => Request,
+        0x01 => Ping
     }
 }
