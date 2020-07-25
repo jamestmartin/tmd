@@ -4,7 +4,9 @@
 mod net;
 
 use crate::net::chat::Chat;
-use crate::net::connection::{Connection, StateHandshake, StateStatus};
+use crate::net::connection::Connection;
+use crate::net::state::handshake::Handshake;
+use crate::net::state::status::Status;
 use tokio::net::{TcpListener, TcpStream};
 use std::io;
 use std::net::IpAddr;
@@ -52,11 +54,11 @@ async fn accept_connection(socket: TcpStream) {
     }
 }
 
-async fn interact_handshake<'a>(mut con: Connection<StateHandshake>) -> io::Result<()> {
-    use crate::net::packet::handshake::*;
+async fn interact_handshake<'a>(mut con: Connection<Handshake>) -> io::Result<()> {
+    use crate::net::state::handshake::*;
 
     match con.read().await? {
-        HandshakeServerbound::Handshake(handshake) => {
+        Serverbound::HandshakePkt(handshake) => {
             use HandshakeNextState::*;
 
             match handshake.next_state {
@@ -67,13 +69,13 @@ async fn interact_handshake<'a>(mut con: Connection<StateHandshake>) -> io::Resu
     }
 }
 
-async fn interact_status<'a>(mut con: Connection<StateStatus>) -> io::Result<()> {
-    use crate::net::packet::status::*;
+async fn interact_status<'a>(mut con: Connection<Status>) -> io::Result<()> {
+    use crate::net::state::status::*;
 
     loop {
         match con.read().await? {
-            StatusServerbound::Request(Request {}) => {
-                con.write(&StatusClientbound::Response(Response {
+            Serverbound::Request(Request {}) => {
+                con.write(&Clientbound::Response(Response {
                     data: ResponseData {
                         version: ResponseVersion {
                             name: "1.16.1".to_string(),
@@ -89,8 +91,8 @@ async fn interact_status<'a>(mut con: Connection<StateStatus>) -> io::Result<()>
                     }
                 })).await?;
             },
-            StatusServerbound::Ping(ping) => {
-                con.write(&StatusClientbound::Pong(Pong {
+            Serverbound::Ping(ping) => {
+                con.write(&Clientbound::Pong(Pong {
                     payload: ping.payload
                 })).await?;
 

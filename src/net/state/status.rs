@@ -1,4 +1,4 @@
-use crate::{define_packets, define_states};
+use crate::{define_packets, define_packet_maps, define_state};
 use crate::net::chat::Chat;
 use crate::net::serialize::{PacketJson};
 use serde::{Deserialize, Serialize};
@@ -56,14 +56,16 @@ define_packets! {
     }
 }
 
-define_states! {
-    state StatusClientbound {
+define_packet_maps! {
+    packet_map Clientbound {
         0x00 => Response,
         0x01 => Pong
     }
 
-    state StatusServerbound {
+    packet_map Serverbound {
         0x00 => Request,
         0x01 => Ping
     }
 }
+
+define_state!(Status, Clientbound, Serverbound);

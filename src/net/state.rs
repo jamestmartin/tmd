@@ -1,58 +1,27 @@
-use crate::net::serialize::{PacketDeserializer, PacketSerializer};
+pub mod handshake;
+pub mod status;
 
-pub trait ProtocolState: Sized {
-    /// Get a packet's id.
-    fn id(&self) -> i32;
-    /// Read a packet from the deserializer.
-    fn read(id: i32, deser: &mut impl PacketDeserializer) -> Result<Self, String>;
-    /// Write this packet's data to the serializer.
-    fn write(&self, ser: &mut impl PacketSerializer);
+use crate::net::packet_map::PacketMap;
+
+pub trait ProtocolState {
+    type Clientbound: PacketMap;
+    type Serverbound: PacketMap;
 }
 
 impl ProtocolState for ! {
-    fn id(&self) -> i32 {
-        match *self { }
-    }
-
-    fn read(_id: i32, _deser: &mut impl PacketDeserializer) -> Result<Self, String> {
-        Err("Cannot read packets; the connection state is disconnected.".to_string())
-    }
-
-    fn write(&self, _ser: &mut impl PacketSerializer) {
-        match *self { }
-    }
+    type Clientbound = !;
+    type Serverbound = !;
 }
 
 #[macro_export]
-macro_rules! define_states {
-    { $( state $name:ident { $( $id:expr => $packet:ident ),* } )+ } => {
-        $(
-            pub enum $name {
-                $( $packet($packet) ),*
-            }
+macro_rules! define_state {
+    ( $name:ident , $cb:ty , $sb:ty ) => {
+        #[allow(dead_code)]
+        pub enum $name {}
 
-            impl crate::net::state::ProtocolState for $name {
-                fn id(&self) -> i32 {
-                    match *self {
-                        $( $name::$packet(_) => $id ),*
-                    }
-                }
-
-                #[allow(unused_variables)]
-                fn read(id: i32, deser: &mut impl crate::net::serialize::PacketDeserializer) -> Result<Self, String> {
-                    match id {
-                        $( $id => deser.read::<$packet>().map($name::$packet), )*
-                        id => Err(format!("Invalid packet id: {}", id))
-                    }
-                }
-
-                #[allow(unused_variables)]
-                fn write(&self, ser: &mut impl crate::net::serialize::PacketSerializer) {
-                    match *self {
-                        $( $name::$packet(ref pkt) => ser.write(pkt) ),*
-                    }
-                }
-            }
-        )*
+        impl crate::net::state::ProtocolState for $name {
+            type Clientbound = $cb;
+            type Serverbound = $sb;
+        }
     }
 }

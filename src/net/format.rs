@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 use crate::net::{Reader, Writer};
-use crate::net::state::ProtocolState;
+use crate::net::packet_map::PacketMap;
 use std::boxed::Box;
 use std::io;
 use tokio::io::AsyncReadExt;
 
 #[async_trait]
 pub trait PacketFormat {
-    async fn send<P: ProtocolState + Sync>(&self, dest: &mut Writer, pkt: &P) -> io::Result<()>;
-    async fn recieve<P: ProtocolState>(&self, src: &mut Reader) -> io::Result<P>;
+    async fn send<P: PacketMap>(&self, dest: &mut Writer, pkt: &P) -> io::Result<()>;
+    async fn recieve<P: PacketMap>(&self, src: &mut Reader) -> io::Result<P>;
 }
 
 pub const MAX_CLIENT_PACKET_SIZE: usize = 32767;
@@ -35,7 +35,7 @@ async fn read_varint(src: &mut Reader) -> io::Result<(usize, i32)> {
 
 #[async_trait]
 impl PacketFormat for DefaultPacketFormat {
-    async fn send<P: ProtocolState + Sync>(&self, dest: &mut Writer, pkt: &P) -> io::Result<()> {
+    async fn send<P: PacketMap>(&self, dest: &mut Writer, pkt: &P) -> io::Result<()> {
         use crate::net::serialize::{PacketSerializer, VarInt};
 
         let packet_id = pkt.id();
@@ -61,7 +61,7 @@ impl PacketFormat for DefaultPacketFormat {
         Ok(())
     }
 
-    async fn recieve<P: ProtocolState>(&self, src: &mut Reader) -> io::Result<P> {
+    async fn recieve<P: PacketMap>(&self, src: &mut Reader) -> io::Result<P> {
         use crate::net::serialize::VecPacketDeserializer;
 
         let (_, length) = read_varint(src).await?;

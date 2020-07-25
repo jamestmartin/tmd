@@ -1,64 +1,24 @@
 use crate::net::{Reader, Writer};
 use crate::net::format::{PacketFormat, DefaultPacketFormat};
 use crate::net::state::ProtocolState;
-use crate::net::packet::handshake::{HandshakeClientbound, HandshakeServerbound};
-use crate::net::packet::status::{StatusClientbound, StatusServerbound};
+use crate::net::state::handshake::Handshake;
+use crate::net::state::status::Status;
 use std::io;
 use std::marker::PhantomData;
 use tokio::net::TcpStream;
 
-pub trait State {
-    type Clientbound: ProtocolState + Sync;
-    type Serverbound: ProtocolState + Sync;
-}
-
-#[allow(dead_code)]
-pub enum StateHandshake {}
-
-impl State for StateHandshake {
-    type Clientbound = HandshakeClientbound;
-    type Serverbound = HandshakeServerbound;
-}
-
-#[allow(dead_code)]
-pub enum StateStatus {}
-
-impl State for StateStatus {
-    type Clientbound = StatusClientbound;
-    type Serverbound = StatusServerbound;
-}
-
-#[allow(dead_code)]
-pub enum StateDisconnected {}
-
-impl State for StateDisconnected {
-    type Clientbound = !;
-    type Serverbound = !;
-}
-
-#[allow(dead_code)]
-pub enum StateLogin {}
-
-impl State for StateLogin {
-    type Clientbound = !;
-    type Serverbound = !;
-}
-
-#[allow(dead_code)]
-pub enum StatePlay {}
-
-impl State for StatePlay {
-    type Clientbound = !;
-    type Serverbound = !;
-}
-
-pub struct Connection<St: State> {
+pub struct Connection<St: ProtocolState> {
     src: Reader,
     dest: Writer,
     st: PhantomData<St>,
 }
 
-impl<St: State> Connection<St> {
+// Placeholders until I implement these protocol states.
+use crate::define_state;
+define_state!(Login, !, !);
+define_state!(Play, !, !);
+
+impl<St: ProtocolState> Connection<St> {
     pub async fn write(&mut self, pkt: &St::Clientbound) -> io::Result<()> {
         DefaultPacketFormat.send::<St::Clientbound>(&mut self.dest, pkt).await
     }
@@ -67,7 +27,7 @@ impl<St: State> Connection<St> {
         DefaultPacketFormat.recieve::<St::Serverbound>(&mut self.src).await
     }
 
-    pub fn into_disconnected(self) -> Connection<StateDisconnected> {
+    pub fn into_disconnected(self) -> Connection<!> {
         Connection {
             src: self.src,
             dest: self.dest,
@@ -76,7 +36,7 @@ impl<St: State> Connection<St> {
     }
 }
 
-impl Connection<StateHandshake> {
+impl Connection<Handshake> {
     pub fn new(stream: TcpStream) -> Self {
         use tokio::io::{BufReader, BufWriter};
 
@@ -89,7 +49,7 @@ impl Connection<StateHandshake> {
         }
     }
 
-    pub fn into_status(self) -> Connection<StateStatus> {
+    pub fn into_status(self) -> Connection<Status> {
         Connection {
             src: self.src,
             dest: self.dest,
@@ -97,7 +57,7 @@ impl Connection<StateHandshake> {
         }
     }
 
-    pub fn into_login(self) -> Connection<StateLogin> {
+    pub fn into_login(self) -> Connection<Login> {
         Connection {
             src: self.src,
             dest: self.dest,
@@ -106,8 +66,8 @@ impl Connection<StateHandshake> {
     }
 }
 
-impl Connection<StateLogin> {
-    pub fn into_play(self) -> Connection<StatePlay> {
+impl Connection<Login> {
+    pub fn into_play(self) -> Connection<Play> {
         Connection {
             src: self.src,
             dest: self.dest,

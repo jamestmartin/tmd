@@ -1,4 +1,4 @@
-use crate::{define_packets, define_states};
+use crate::{define_packets, define_packet_maps, define_state};
 use crate::net::serialize::{PacketReadable, PacketWritable, PacketDeserializer, PacketSerializer, VarInt};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -31,7 +31,7 @@ impl PacketWritable for &HandshakeNextState {
 }
 
 define_packets! {
-    packet Handshake {
+    packet HandshakePkt {
         protocol_version: VarInt,
         server_address: String,
         server_port: u16,
@@ -39,10 +39,12 @@ define_packets! {
     }
 }
 
-define_states! {
-    state HandshakeClientbound { }
+define_packet_maps! {
+    packet_map Clientbound { }
 
-    state HandshakeServerbound {
-        0x00 => Handshake
+    packet_map Serverbound {
+        0x00 => HandshakePkt
     }
 }
+
+define_state!(Handshake, Clientbound, Serverbound);

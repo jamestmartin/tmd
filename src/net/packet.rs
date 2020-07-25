@@ -1,6 +1,3 @@
-pub mod handshake;
-pub mod status;
-
 #[macro_export]
 macro_rules! define_packets {
     { $( packet $name:ident { $( $field:ident : $type:ty ),* } )+ } => {
