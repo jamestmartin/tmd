@@ -3,7 +3,7 @@ pub mod login;
 pub mod play;
 pub mod status;
 
-use crate::net::packet_map::PacketMap;
+use crate::net::protocol::packet_map::PacketMap;
 
 pub trait ProtocolState {
     type Clientbound: PacketMap;
@@ -21,7 +21,7 @@ macro_rules! define_state {
         #[allow(dead_code)]
         pub enum $name {}
 
-        impl crate::net::state::ProtocolState for $name {
+        impl crate::net::protocol::state::ProtocolState for $name {
             type Clientbound = $cb;
             type Serverbound = $sb;
         }

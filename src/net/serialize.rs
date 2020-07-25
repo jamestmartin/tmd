@@ -1,4 +1,3 @@
-use crate::net::format::MAX_CLIENT_PACKET_SIZE;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::borrow::Borrow;
@@ -199,13 +198,9 @@ impl PacketReadable for Vec<u8> {
     fn read(deser: &mut impl PacketDeserializer) -> Result<Self, String> {
         let length: i32 = deser.read::<VarInt>()?.into();
         if length < 0 {
-            return Err("String length cannot be negative.".to_string());
+            return Err("Array or string length cannot be negative.".to_string());
         }
-
         let length = length as usize;
-        if length > MAX_CLIENT_PACKET_SIZE {
-            return Err("Byte array was too long.".to_string());
-        }
 
         let mut it = Vec::with_capacity(length);
         it.resize(length, 0);

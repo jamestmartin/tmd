@@ -1,10 +1,7 @@
 pub mod chat;
 pub mod connection;
-pub mod format;
-pub mod packet;
-pub mod packet_map;
+pub mod protocol;
 pub mod serialize;
-pub mod state;
 
 use tokio::io::{BufReader, BufWriter};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};

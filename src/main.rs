@@ -5,10 +5,10 @@ mod net;
 
 use crate::net::chat::Chat;
 use crate::net::connection::Connection;
-use crate::net::state::handshake::Handshake;
-use crate::net::state::login::Login;
-use crate::net::state::play::Play;
-use crate::net::state::status::Status;
+use crate::net::protocol::state::handshake::Handshake;
+use crate::net::protocol::state::login::Login;
+use crate::net::protocol::state::play::Play;
+use crate::net::protocol::state::status::Status;
 use tokio::net::{TcpListener, TcpStream};
 use std::io;
 use std::net::IpAddr;
@@ -61,7 +61,7 @@ fn mk_err<A, S: std::borrow::Borrow<str>>(str: S) -> io::Result<A> {
 }
 
 async fn interact_handshake(mut con: Connection<Handshake>) -> io::Result<()> {
-    use crate::net::state::handshake::*;
+    use crate::net::protocol::state::handshake::*;
 
     match con.read().await? {
         Serverbound::HandshakePkt(handshake) => {
@@ -76,7 +76,7 @@ async fn interact_handshake(mut con: Connection<Handshake>) -> io::Result<()> {
 }
 
 async fn interact_status(mut con: Connection<Status>) -> io::Result<()> {
-    use crate::net::state::status::*;
+    use crate::net::protocol::state::status::*;
 
     loop {
         match con.read().await? {
@@ -110,7 +110,7 @@ async fn interact_status(mut con: Connection<Status>) -> io::Result<()> {
 }
 
 async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
-    use crate::net::state::login::*;
+    use crate::net::protocol::state::login::*;
 
     let name = match con.read().await? {
         Serverbound::LoginStart(login_start) => {
@@ -126,6 +126,8 @@ async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
 
     eprintln!("Client set username to {}.", name);
 
+    con.set_compression(Some(64)).await?;
+
     con.write(&Clientbound::LoginSuccess(LoginSuccess {
         uuid: uuid::Uuid::nil(),
         username: name,
@@ -135,7 +137,7 @@ async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
 }
 
 async fn interact_play(mut con: Connection<Play>) -> io::Result<()> {
-    use crate::net::state::play::*;
+    use crate::net::protocol::state::play::*;
 
     con.write(&Clientbound::Disconnect(Disconnect {
         reason: Chat { text: "Goodbye!".to_string() }
