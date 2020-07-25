@@ -9,6 +9,20 @@ pub trait ProtocolState: Sized {
     fn write(&self, ser: &mut impl PacketSerializer);
 }
 
+impl ProtocolState for ! {
+    fn id(&self) -> i32 {
+        match *self { }
+    }
+
+    fn read(_id: i32, _deser: &mut impl PacketDeserializer) -> Result<Self, String> {
+        Err("Cannot read packets; the connection state is disconnected.".to_string())
+    }
+
+    fn write(&self, _ser: &mut impl PacketSerializer) {
+        match *self { }
+    }
+}
+
 #[macro_export]
 macro_rules! define_states {
     { $( state $name:ident { $( $id:expr => $packet:ident ),* } )+ } => {

@@ -1,11 +1,10 @@
 #![feature(const_generics)]
+#![feature(never_type)]
 
 mod net;
 
-use crate::net::{Reader, Writer};
 use crate::net::chat::Chat;
-use crate::net::format::{PacketFormat, DefaultPacketFormat};
-use tokio::io::{BufReader, BufWriter};
+use crate::net::connection::{Connection, StateHandshake, StateStatus};
 use tokio::net::{TcpListener, TcpStream};
 use std::io;
 use std::net::IpAddr;
@@ -43,43 +42,38 @@ async fn listen(mut listener: TcpListener) {
     }
 }
 
-async fn accept_connection(mut socket: TcpStream) {
-    let (read, write) = socket.split();
-    let mut source = BufReader::new(read);
-    let mut dest = BufWriter::new(write);
+async fn accept_connection(socket: TcpStream) {
+    let con = Connection::new(socket);
 
     eprintln!("Client connected.");
-    match interact_handshake(&mut source, &mut dest).await {
+    match interact_handshake(con).await {
         Err(err) => { eprintln!("Client disconnected with error: {:?}", err); },
         Ok(_) => { eprintln!("Client disconnected without error."); }
     }
 }
 
-async fn interact_handshake<'a>(source: &mut Reader<'a>, dest: &mut Writer<'a>) -> io::Result<()> {
+async fn interact_handshake<'a>(mut con: Connection<StateHandshake>) -> io::Result<()> {
     use crate::net::packet::handshake::*;
 
-    let pkt = DefaultPacketFormat.recieve::<HandshakeServerbound>(source).await?;
-
-    match pkt {
+    match con.read().await? {
         HandshakeServerbound::Handshake(handshake) => {
-            if handshake.next_state == HandshakeNextState::Status {
-                interact_status(source, dest).await
-            } else {
-                Err(io::Error::new(io::ErrorKind::Other, "We do not support client log-in yet.".to_string()))
+            use HandshakeNextState::*;
+
+            match handshake.next_state {
+                Status => interact_status(con.into_status()).await,
+                Login => Err(io::Error::new(io::ErrorKind::Other, "We do not support client log-in yet.".to_string()))
             }
         }
     }
 }
 
-async fn interact_status<'a>(source: &mut Reader<'a>, dest: &mut Writer<'a>) -> io::Result<()> {
+async fn interact_status<'a>(mut con: Connection<StateStatus>) -> io::Result<()> {
     use crate::net::packet::status::*;
 
     loop {
-        let pkt = DefaultPacketFormat.recieve::<StatusServerbound>(source).await?;
-
-        match pkt {
+        match con.read().await? {
             StatusServerbound::Request(Request {}) => {
-                DefaultPacketFormat.send(dest, &StatusClientbound::Response(Response {
+                con.write(&StatusClientbound::Response(Response {
                     data: ResponseData {
                         version: ResponseVersion {
                             name: "1.16.1".to_string(),
@@ -96,7 +90,7 @@ async fn interact_status<'a>(source: &mut Reader<'a>, dest: &mut Writer<'a>) -> 
                 })).await?;
             },
             StatusServerbound::Ping(ping) => {
-                DefaultPacketFormat.send(dest, &StatusClientbound::Pong(Pong {
+                con.write(&StatusClientbound::Pong(Pong {
                     payload: ping.payload
                 })).await?;
 
