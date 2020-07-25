@@ -3,6 +3,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::borrow::Borrow;
 use std::convert::{From, Into};
+use uuid::Uuid;
 
 pub trait PacketSerializer: Sized {
     /// Write a slice of bytes directly, without a length prefix.
@@ -24,6 +25,7 @@ impl PacketSerializer for Vec<u8> {
 
 pub trait PacketDeserializer: Sized {
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), String>;
+    fn read_rest(&mut self) -> Result<Box<[u8]>, String>;
     fn read_eof(&mut self) -> Result<(), String>;
 
     fn read<D: PacketReadable>(&mut self) -> Result<D, String> {
@@ -56,6 +58,13 @@ impl PacketDeserializer for VecPacketDeserializer<'_> {
         self.index += buf.len();
 
         Ok(())
+    }
+
+    fn read_rest(&mut self) -> Result<Box<[u8]>, String> {
+        let mut it = Vec::new();
+        it.copy_from_slice(&self.data[self.index..]);
+        self.index = self.data.len();
+        Ok(it.into_boxed_slice())
     }
 
     fn read_eof(&mut self) -> Result<(), String> {
@@ -113,7 +122,7 @@ macro_rules! impl_packet_data_for_num {
     }
 }
 
-impl_packet_data_for_num!(u8, 1; i8, 1; u16, 2; i16, 2; u32, 4; i32, 4; u64, 8; i64, 8;
+impl_packet_data_for_num!(u8, 1; i8, 1; u16, 2; i16, 2; u32, 4; i32, 4; u64, 8; i64, 8; u128, 16;
                           f32, 4; f64, 8);
 
 // HACK: There is probably a better solution to this than a macro.
@@ -224,6 +233,20 @@ impl PacketWritable for &Box<[u8]> {
     }
 }
 
+pub struct Rest(pub Box<[u8]>);
+
+impl PacketReadable for Rest {
+    fn read(deser: &mut impl PacketDeserializer) -> Result<Self, String> {
+        deser.read_rest().map(Rest)
+    }
+}
+
+impl PacketWritable for &Rest {
+    fn write(self, ser: &mut impl PacketSerializer) {
+        ser.write(&self.0);
+    }
+}
+
 impl PacketWritable for &str {
     fn write(self, ser: &mut impl PacketSerializer) {
         ser.write(self.as_bytes());
@@ -252,6 +275,18 @@ impl PacketReadable for Box<str> {
 impl PacketWritable for &Box<str> {
     fn write(self, ser: &mut impl PacketSerializer) {
         ser.write::<&str>(self.borrow());
+    }
+}
+
+impl PacketReadable for Uuid {
+    fn read(deser: &mut impl PacketDeserializer) -> Result<Self, String> {
+        deser.read::<u128>().map(Uuid::from_u128)
+    }
+}
+
+impl PacketWritable for &Uuid {
+    fn write(self, ser: &mut impl PacketSerializer) {
+        ser.write(self.as_u128());
     }
 }
 

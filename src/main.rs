@@ -6,6 +6,8 @@ mod net;
 use crate::net::chat::Chat;
 use crate::net::connection::Connection;
 use crate::net::state::handshake::Handshake;
+use crate::net::state::login::Login;
+use crate::net::state::play::Play;
 use crate::net::state::status::Status;
 use tokio::net::{TcpListener, TcpStream};
 use std::io;
@@ -54,7 +56,11 @@ async fn accept_connection(socket: TcpStream) {
     }
 }
 
-async fn interact_handshake<'a>(mut con: Connection<Handshake>) -> io::Result<()> {
+fn mk_err<A, S: std::borrow::Borrow<str>>(str: S) -> io::Result<A> {
+    Err(io::Error::new(io::ErrorKind::Other, str.borrow().to_string()))
+}
+
+async fn interact_handshake(mut con: Connection<Handshake>) -> io::Result<()> {
     use crate::net::state::handshake::*;
 
     match con.read().await? {
@@ -63,13 +69,13 @@ async fn interact_handshake<'a>(mut con: Connection<Handshake>) -> io::Result<()
 
             match handshake.next_state {
                 Status => interact_status(con.into_status()).await,
-                Login => Err(io::Error::new(io::ErrorKind::Other, "We do not support client log-in yet.".to_string()))
+                Login => interact_login(con.into_login()).await
             }
         }
     }
 }
 
-async fn interact_status<'a>(mut con: Connection<Status>) -> io::Result<()> {
+async fn interact_status(mut con: Connection<Status>) -> io::Result<()> {
     use crate::net::state::status::*;
 
     loop {
@@ -101,4 +107,39 @@ async fn interact_status<'a>(mut con: Connection<Status>) -> io::Result<()> {
             },
         }
     }
+}
+
+async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
+    use crate::net::state::login::*;
+
+    let name = match con.read().await? {
+        Serverbound::LoginStart(login_start) => {
+            login_start.name
+        },
+        _ => {
+            con.write(&Clientbound::Disconnect(Disconnect {
+                reason: Chat { text: "Unexpected packet (expected Login Start).".to_string() }
+            })).await?;
+            return mk_err("Unexpected packet (expected Login Start).");
+        }
+    };
+
+    eprintln!("Client set username to {}.", name);
+
+    con.write(&Clientbound::LoginSuccess(LoginSuccess {
+        uuid: uuid::Uuid::nil(),
+        username: name,
+    })).await?;
+
+    interact_play(con.into_play()).await
+}
+
+async fn interact_play(mut con: Connection<Play>) -> io::Result<()> {
+    use crate::net::state::play::*;
+
+    con.write(&Clientbound::Disconnect(Disconnect {
+        reason: Chat { text: "Goodbye!".to_string() }
+    })).await?;
+
+    Ok(())
 }

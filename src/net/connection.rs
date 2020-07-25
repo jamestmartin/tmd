@@ -2,6 +2,8 @@ use crate::net::{Reader, Writer};
 use crate::net::format::{PacketFormat, DefaultPacketFormat};
 use crate::net::state::ProtocolState;
 use crate::net::state::handshake::Handshake;
+use crate::net::state::login::Login;
+use crate::net::state::play::Play;
 use crate::net::state::status::Status;
 use std::io;
 use std::marker::PhantomData;
@@ -12,11 +14,6 @@ pub struct Connection<St: ProtocolState> {
     dest: Writer,
     st: PhantomData<St>,
 }
-
-// Placeholders until I implement these protocol states.
-use crate::define_state;
-define_state!(Login, !, !);
-define_state!(Play, !, !);
 
 impl<St: ProtocolState> Connection<St> {
     pub async fn write(&mut self, pkt: &St::Clientbound) -> io::Result<()> {

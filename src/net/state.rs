@@ -1,4 +1,6 @@
 pub mod handshake;
+pub mod login;
+pub mod play;
 pub mod status;
 
 use crate::net::packet_map::PacketMap;
