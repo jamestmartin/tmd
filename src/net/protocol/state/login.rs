@@ -1,6 +1,6 @@
-use crate::{define_packets, define_packet_maps, define_state};
 use crate::net::chat::Chat;
 use crate::net::serialize::{Rest, VarInt};
+use crate::{define_packet_maps, define_packets, define_state};
 use uuid::Uuid;
 
 define_packets! {

@@ -1,15 +1,15 @@
 mod packet_format;
 mod stream;
 
-use crate::net::connection::packet_format::PacketFormat;
 use crate::net::connection::packet_format::default::DefaultPacketFormat;
+use crate::net::connection::packet_format::PacketFormat;
 use crate::net::connection::stream::Stream;
 use crate::net::protocol::packet_map::PacketMap;
-use crate::net::protocol::state::ProtocolState;
 use crate::net::protocol::state::handshake::Handshake;
 use crate::net::protocol::state::login::Login;
 use crate::net::protocol::state::play::Play;
 use crate::net::protocol::state::status::Status;
+use crate::net::protocol::state::ProtocolState;
 use std::io;
 use std::marker::PhantomData;
 use tokio::io::BufStream;
@@ -48,6 +48,7 @@ impl<St: ProtocolState> Connection<St> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn into_disconnected(self) -> Connection<!> {
         self.into_state()
     }
@@ -75,15 +76,16 @@ impl Connection<Login> {
     #[cfg(feature = "compression")]
     pub async fn set_compression(&mut self, threshold: Option<u32>) -> io::Result<()> {
         use crate::net::connection::packet_format::compressed::CompressedPacketFormat;
-        use crate::net::serialize::VarInt;
         use crate::net::protocol::state::login::{Clientbound, SetCompression};
+        use crate::net::serialize::VarInt;
 
         // Tell the client about the new compression threshold,
         // using a packet compressed with the old compression threshold.
         self.write(&Clientbound::SetCompression(SetCompression {
             // A negative threshold will disable compression.
             threshold: VarInt(threshold.map(|x| x as i32).unwrap_or(-1)),
-        })).await?;
+        }))
+        .await?;
 
         // Further packets will use the new compression threshold.
         match threshold {
@@ -92,19 +94,20 @@ impl Connection<Login> {
             },
             None => {
                 self.fmt = Box::new(DefaultPacketFormat);
-            }
+            },
         }
 
         Ok(())
     }
 
     /// WARNING: This function is not idempontent.
-    /// Calling it twice will result in the underlying stream getting encrypted twice.
+    /// Calling it twice will result in the underlying stream getting encrypted
+    /// twice.
     #[cfg(feature = "encryption")]
     pub fn set_encryption(self, secret: &[u8]) -> Result<Self, String> {
-        use cfb8::Cfb8;
-        use cfb8::stream_cipher::NewStreamCipher;
         use crate::net::connection::stream::encrypted::EncryptedStream;
+        use cfb8::stream_cipher::NewStreamCipher;
+        use cfb8::Cfb8;
 
         let cipher: Cfb8<aes::Aes128> = Cfb8::new_var(secret, secret).map_err(|err| err.to_string())?;
 

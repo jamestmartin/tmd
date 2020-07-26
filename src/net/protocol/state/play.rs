@@ -1,5 +1,5 @@
-use crate::{define_packets, define_packet_maps, define_state};
 use crate::net::chat::Chat;
+use crate::{define_packet_maps, define_packets, define_state};
 
 // TODO: This protocol state isn't even close to entirely mapped.
 

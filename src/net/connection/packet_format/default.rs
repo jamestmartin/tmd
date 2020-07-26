@@ -1,6 +1,5 @@
+use crate::net::connection::packet_format::{read_varint, PacketFormat, Reader, Writer, MAX_PACKET_SIZE};
 use async_trait::async_trait;
-use crate::net::connection::packet_format::
-    {PacketFormat, Reader, Writer, MAX_PACKET_SIZE, read_varint};
 use std::boxed::Box;
 use std::io;
 
@@ -15,10 +14,8 @@ impl PacketFormat for DefaultPacketFormat {
         if length > MAX_PACKET_SIZE as i32 {
             return Err(io::Error::new(io::ErrorKind::Other, "Packet was too long.".to_string()));
         }
-        let length = length as usize;
 
-        let mut buf = Vec::with_capacity(length);
-        buf.resize(length, 0);
+        let mut buf = vec![0; length as usize];
         src.read_exact(buf.as_mut_slice()).await?;
 
         Ok(buf.into_boxed_slice())

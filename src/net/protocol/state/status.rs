@@ -1,6 +1,6 @@
-use crate::{define_packets, define_packet_maps, define_state};
 use crate::net::chat::Chat;
-use crate::net::serialize::{PacketJson};
+use crate::net::serialize::PacketJson;
+use crate::{define_packet_maps, define_packets, define_state};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -22,7 +22,7 @@ impl PacketJson for ResponsePlayersSample {}
 pub struct ResponsePlayers {
     pub max: u32,
     pub online: u32,
-    pub sample: Vec<ResponsePlayersSample>
+    pub sample: Vec<ResponsePlayersSample>,
 }
 impl PacketJson for ResponsePlayers {}
 

@@ -1,6 +1,5 @@
+use crate::net::connection::packet_format::{read_varint, PacketFormat, Reader, Writer, MAX_PACKET_SIZE};
 use async_trait::async_trait;
-use crate::net::connection::packet_format::
-    {PacketFormat, Reader, Writer, MAX_PACKET_SIZE, read_varint};
 use std::boxed::Box;
 use std::io;
 
@@ -10,9 +9,7 @@ pub struct CompressedPacketFormat {
 
 impl CompressedPacketFormat {
     pub fn new(threshold: usize) -> Self {
-        Self {
-            threshold: threshold,
-        }
+        Self { threshold }
     }
 }
 
@@ -87,9 +84,10 @@ impl PacketFormat for CompressedPacketFormat {
             // in case the output data ends up larger than the input data
             // (e.g. due to the zlib header).
             // FIXME: Further research to figure out the exact maximum capacity necessary.
-            //   Perhaps you only need space for the header and the data itself can't get bigger?
-            //   And what is the limit to how much bigger the data will get?
-            //   Currently I don't actually know for a fact that this won't ever drop data.
+            //   Perhaps you only need space for the header and the data itself can't get
+            // bigger?   And what is the limit to how much bigger the data will
+            // get?   Currently I don't actually know for a fact that this won't
+            // ever drop data.
             let mut compressed = Vec::with_capacity(1024 + data.len());
             Compress::new(flate2::Compression::best(), true)
                 .compress_vec(data, &mut compressed, FlushCompress::Finish)

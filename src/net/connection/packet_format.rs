@@ -23,7 +23,7 @@ pub async fn read_varint(src: &mut Reader) -> io::Result<(usize, i32)> {
     let mut acc = 0;
     while num_read < 5 {
         let byte = src.read_u8().await?;
-        acc |= ((byte & 0b01111111) as i32) << num_read * 7;
+        acc |= ((byte & 0b01111111) as i32) << (num_read * 7);
 
         num_read += 1;
 

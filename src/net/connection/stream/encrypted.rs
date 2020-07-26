@@ -1,10 +1,10 @@
-use aes::Aes128;
-use cfb8::Cfb8;
-use cfb8::stream_cipher::StreamCipher;
 use crate::net::connection::stream::Stream;
+use aes::Aes128;
+use cfb8::stream_cipher::StreamCipher;
+use cfb8::Cfb8;
 use std::pin::Pin;
-use std::task::Poll;
 use std::task::Context;
+use std::task::Poll;
 use tokio::io::{AsyncRead, AsyncWrite, Result};
 
 pub struct EncryptedStream {
@@ -16,18 +16,18 @@ pub struct EncryptedStream {
 impl EncryptedStream {
     pub fn new(rw: Box<dyn Stream>, cipher: Cfb8<Aes128>) -> Self {
         Self {
-            rw: rw,
-            cipher: cipher,
+            rw,
+            cipher,
             write_buf: Vec::new(),
         }
     }
 
     fn flush(&mut self, cx: &mut Context) -> Poll<Result<()>> {
         // We don't know when the internal writer will be ready,
-        // so we have to coax it into returning "pending" and scheduling an interrupt for us.
-        // Either that, or we finish writing our buffer and flush.
+        // so we have to coax it into returning "pending" and scheduling an interrupt
+        // for us. Either that, or we finish writing our buffer and flush.
         loop {
-            if self.write_buf.len() == 0 {
+            if self.write_buf.is_empty() {
                 break;
             }
 
@@ -37,7 +37,7 @@ impl EncryptedStream {
                     new_buf.copy_from_slice(&self.write_buf[length..]);
                     self.write_buf = new_buf;
                 },
-                other => return other.map(|x| x.map(|_| ()))
+                other => return other.map(|x| x.map(|_| ())),
             }
         }
 
@@ -54,7 +54,7 @@ impl AsyncRead for EncryptedStream {
                 me.cipher.decrypt(&mut buf[..bytes]);
                 Poll::Ready(Ok(bytes))
             },
-            other => other
+            other => other,
         }
     }
 }
@@ -79,10 +79,8 @@ impl AsyncWrite for EncryptedStream {
         let me = Pin::into_inner(self);
 
         match me.flush(cx) {
-            Poll::Ready(Ok(())) => {
-                Pin::new(&mut me.rw).poll_shutdown(cx)
-            },
-            other => other
+            Poll::Ready(Ok(())) => Pin::new(&mut me.rw).poll_shutdown(cx),
+            other => other,
         }
     }
 }

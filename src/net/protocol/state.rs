@@ -25,5 +25,5 @@ macro_rules! define_state {
             type Clientbound = $cb;
             type Serverbound = $sb;
         }
-    }
+    };
 }

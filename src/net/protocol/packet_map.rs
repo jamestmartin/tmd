@@ -13,7 +13,7 @@ impl PacketMap for ! {
     }
 
     fn write(&self, _ser: &mut impl PacketSerializer) {
-        match *self { }
+        match *self {}
     }
 }
 

@@ -1,5 +1,5 @@
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::borrow::Borrow;
 use std::convert::{From, Into};
 use uuid::Uuid;
@@ -38,11 +38,8 @@ pub struct VecPacketDeserializer<'a> {
 }
 
 impl VecPacketDeserializer<'_> {
-    pub fn new<'a>(data: &'a [u8]) -> VecPacketDeserializer<'a> {
-        VecPacketDeserializer {
-            data: data,
-            index: 0,
-        }
+    pub fn new(data: &[u8]) -> VecPacketDeserializer<'_> {
+        VecPacketDeserializer { data, index: 0 }
     }
 }
 
@@ -92,7 +89,7 @@ impl PacketReadable for bool {
         match value {
             0x00 => Ok(false),
             0x01 => Ok(true),
-            n => Err(format!("{:0X} is not a valid boolean.", n))
+            n => Err(format!("{:0X} is not a valid boolean.", n)),
         }
     }
 }
@@ -158,7 +155,7 @@ macro_rules! impl_varnum {
                         }
 
                         // Make space for the rest of the bits.
-                        acc = acc << 7;
+                        acc <<= 7;
                     }
 
                     Err(format!("VarNum was more than {} bytes.", $length))
@@ -170,7 +167,7 @@ macro_rules! impl_varnum {
                     let mut value = self.0;
                     loop {
                         let mut temp = (value & 0b01111111) as u8;
-                        value = value >> 7;
+                        value >>= 7;
                         if value != 0 {
                             temp |= 0b10000000;
                         }
@@ -201,10 +198,8 @@ impl PacketReadable for Vec<u8> {
         if length < 0 {
             return Err("Array or string length cannot be negative.".to_string());
         }
-        let length = length as usize;
 
-        let mut it = Vec::with_capacity(length);
-        it.resize(length, 0);
+        let mut it = vec![0; length as usize];
         deser.read_exact(it.as_mut_slice())?;
 
         Ok(it)
@@ -286,12 +281,12 @@ impl PacketWritable for &Uuid {
     }
 }
 
-/// A marker trait indicating that a JSON-serialiable type should be serialized as JSON in packets.
-/// Most primitive types are already serializable as JSON,
+/// A marker trait indicating that a JSON-serialiable type should be serialized
+/// as JSON in packets. Most primitive types are already serializable as JSON,
 /// but we explicitly *don't* want to serialize them as JSON in packets.
-pub trait PacketJson { }
+pub trait PacketJson {}
 
-impl PacketJson for crate::net::chat::Chat { }
+impl PacketJson for crate::net::chat::Chat {}
 
 impl<S: DeserializeOwned + PacketJson + Sized> PacketReadable for S {
     fn read(deser: &mut impl PacketDeserializer) -> Result<Self, String> {
@@ -307,19 +302,16 @@ impl<S: PacketJson + Serialize> PacketWritable for &S {
 }
 
 // Although according to my organizational scheme, this should go first,
-// it goes last anyway because constant generics break Atom's syntax highlighting
-// for all code below it.
+// it goes last anyway because constant generics break Atom's syntax
+// highlighting for all code below it.
 
 impl<const N: usize> PacketReadable for [u8; N] {
     fn read(deser: &mut impl PacketDeserializer) -> Result<Self, String> {
-        use std::convert::TryInto;
-
         let mut buf = [0; N];
         deser.read_exact(&mut buf)?;
-        Ok(buf.try_into().unwrap())
+        Ok(buf)
     }
 }
-
 
 impl<const N: usize> PacketWritable for [u8; N] {
     fn write(self, ser: &mut impl PacketSerializer) {

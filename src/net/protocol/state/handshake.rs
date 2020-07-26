@@ -1,5 +1,5 @@
-use crate::{define_packets, define_packet_maps, define_state};
-use crate::net::serialize::{PacketReadable, PacketWritable, PacketDeserializer, PacketSerializer, VarInt};
+use crate::net::serialize::{PacketDeserializer, PacketReadable, PacketSerializer, PacketWritable, VarInt};
+use crate::{define_packet_maps, define_packets, define_state};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HandshakeNextState {
@@ -14,7 +14,7 @@ impl PacketReadable for HandshakeNextState {
         Ok(match deser.read::<VarInt>()?.into() {
             1 => Status,
             2 => Login,
-            n => return Err(format!("Invalid next protocol state in handshake: {}", n))
+            n => return Err(format!("Invalid next protocol state in handshake: {}", n)),
         })
     }
 }

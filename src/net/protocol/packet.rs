@@ -16,7 +16,7 @@ macro_rules! define_packets {
                     deser.read_eof()?;
                     Ok($name {
                         $(
-                            $field: $field,
+                            $field,
                         )*
                     })
                 }
