@@ -3,17 +3,124 @@ name: Rust
 on: [push]
 
 jobs:
-  build:
+  # Lint the code with rustfmt and clippy. All warnings are errors.
+  lint:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout sources
-      uses: actions/checkout@v2
+      - name: Checkout sources
+        uses: actions/checkout@v2
 
-    - name: Install latest nightly
-      uses: actions-rs/toolchain@v1
-      with:
-          toolchain: nightly
-          override: true
+      - name: Install rust with rustfmt
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            target: ${{ matrix.target }}
+            profile: minimal
+            components: rustfmt, clippy
+            override: true
 
-    - name: Build
-      run: cargo build --locked
+      - name: Check formatting
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+
+      - name: Lint with clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-targets --all-features -- -D warnings
+
+
+  # Make sure every combination of features and targets produces valid Rust.
+  check:
+    needs: [lint]
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        target:
+          # We should only check targets which we distinguish with config flags.
+          # Currently, we don't distinguish by target at all,
+          # so only one target needs to be enabled.
+          # - "x86_64-apple-darwin"
+          # - "x86_64-pc-windows-gnu"
+          # - "x86_64-pc-windows-msvc"
+          - "x86_64-unknown-linux-gnu"
+
+        features:
+          - ""
+          - "compression"
+          - "encryption"
+          - "authentication"
+          - "compression,encryption"
+          - "compression,authentication"
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            target: ${{ matrix.target }}
+            profile: minimal
+            override: true
+
+      - name: Check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --locked --target ${{ matrix.target }} --no-default-features --features "${{ matrix.features }}"
+
+  # Make sure the crate can be built natively on every platform.
+  build:
+    needs: [check]
+
+    # You should always specify the OS in the includes,
+    # but if you do not provide a default, GitHub errors.
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
+
+    strategy:
+      matrix:
+        target:
+          - "x86_64-apple-darwin"
+          - "x86_64-pc-windows-gnu"
+          - "x86_64-pc-windows-msvc"
+          - "x86_64-unknown-linux-gnu"
+
+        include:
+          - target: "x86_64-apple-darwin"
+            os: macos-latest
+            # MacOS is experimental until this issue is resolved: https://github.com/rust-lang/rust/issues/71988
+            experimental: true
+
+          - target: "x86_64-pc-windows-gnu"
+            os: windows-latest
+
+          - target: "x86_64-pc-windows-msvc"
+            os: windows-latest
+
+          - target: "x86_64-unknown-linux-gnu"
+            os: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            target: ${{ matrix.target }}
+            profile: minimal
+            override: true
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --locked --target ${{ matrix.target }} --all-features
