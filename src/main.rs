@@ -124,72 +124,78 @@ async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
         }
     };
 
-    use rand::Rng;
-    use rand::rngs::OsRng;
-    use rsa::{RSAPrivateKey, PaddingScheme};
+    #[cfg(feature = "encryption")]
+    {
+        use rand::Rng;
+        use rand::rngs::OsRng;
+        use rsa::{RSAPrivateKey, PaddingScheme};
 
-    use std::fs::File;
-    use std::io::Read;
-    let mut public_key = Vec::new();
-    File::open("private/pub.der").expect("missing public key").read_to_end(&mut public_key)?;
+        use std::fs::File;
+        use std::io::Read;
+        let mut public_key = Vec::new();
+        File::open("private/pub.der").expect("missing public key").read_to_end(&mut public_key)?;
 
-    let mut private_key = Vec::new();
-    File::open("private/priv.der").expect("missing private key").read_to_end(&mut private_key)?;
+        let mut private_key = Vec::new();
+        File::open("private/priv.der").expect("missing private key").read_to_end(&mut private_key)?;
 
-    let key = RSAPrivateKey::from_pkcs1(&private_key).expect("Invalid private key.");
+        let key = RSAPrivateKey::from_pkcs1(&private_key).expect("Invalid private key.");
 
-    let mut verify_token = Vec::new();
-    verify_token.resize(4, 0u8);
-    OsRng.fill(verify_token.as_mut_slice());
+        let mut verify_token = Vec::new();
+        verify_token.resize(4, 0u8);
+        OsRng.fill(verify_token.as_mut_slice());
 
-    let server_id = "";
+        let server_id = "";
 
-    con.write(&Clientbound::EncryptionRequest(EncryptionRequest {
-        server_id: server_id.to_string().into_boxed_str(),
-        public_key: public_key.clone().into_boxed_slice(),
-        verify_token: verify_token.clone().into_boxed_slice(),
-    })).await?;
+        con.write(&Clientbound::EncryptionRequest(EncryptionRequest {
+            server_id: server_id.to_string().into_boxed_str(),
+            public_key: public_key.clone().into_boxed_slice(),
+            verify_token: verify_token.clone().into_boxed_slice(),
+        })).await?;
 
-    let secret = match con.read().await? {
-        Serverbound::EncryptionResponse(encryption_response) => {
-            let token = key.decrypt(PaddingScheme::PKCS1v15Encrypt,
-                                    &encryption_response.verify_token)
-                                    .expect("Failed to decrypt verify token.");
-            if token.as_slice() != verify_token.as_slice() {
-                return mk_err("Incorrect verify token.");
+        let secret = match con.read().await? {
+            Serverbound::EncryptionResponse(encryption_response) => {
+                let token = key.decrypt(PaddingScheme::PKCS1v15Encrypt,
+                                        &encryption_response.verify_token)
+                                        .expect("Failed to decrypt verify token.");
+                if token.as_slice() != verify_token.as_slice() {
+                    return mk_err("Incorrect verify token.");
+                }
+
+                key.decrypt(PaddingScheme::PKCS1v15Encrypt, &encryption_response.shared_secret)
+                    .expect("Failed to decrypt shared secret.")
+            },
+            _ => {
+                return mk_err("Unexpected packet (expected Encryption Response).");
             }
-
-            key.decrypt(PaddingScheme::PKCS1v15Encrypt, &encryption_response.shared_secret)
-                .expect("Failed to decrypt shared secret.")
-        },
-        _ => {
-            return mk_err("Unexpected packet (expected Encryption Response).");
-        }
-    };
-
-    con = con.set_encryption(&secret).expect("Failed to set encryption.");
-
-    use reqwest::Client;
-
-    let server_hash = {
-        let server_hash_bytes = {
-            use sha1::{Sha1, Digest};
-            let mut hasher = Sha1::new();
-            hasher.update(server_id.as_bytes());
-            hasher.update(&secret);
-            hasher.update(&public_key);
-            hasher.finalize()
         };
 
-        format!("{:x}", num_bigint::BigInt::from_signed_bytes_be(&server_hash_bytes))
-    };
+        con = con.set_encryption(&secret).expect("Failed to set encryption.");
 
-    // TODO: Authentication, not just encryption.
-    println!("{:?}", Client::new().get("https://sessionserver.mojang.com/session/minecraft/hasJoined")
-        .header("Content-Type", "application/json")
-        .query(&[("username", name.clone()), ("serverId", server_hash.into_boxed_str())])
-        .send().await.expect("Request failed.").text().await.unwrap());
+        #[cfg(feature = "authentication")]
+        {
+            let server_hash = {
+                let server_hash_bytes = {
+                    use sha1::{Sha1, Digest};
+                    let mut hasher = Sha1::new();
+                    hasher.update(server_id.as_bytes());
+                    hasher.update(&secret);
+                    hasher.update(&public_key);
+                    hasher.finalize()
+                };
 
+                format!("{:x}", num_bigint::BigInt::from_signed_bytes_be(&server_hash_bytes))
+            };
+
+            use reqwest::Client;
+
+            println!("{:?}", Client::new().get("https://sessionserver.mojang.com/session/minecraft/hasJoined")
+                .header("Content-Type", "application/json")
+                .query(&[("username", name.clone()), ("serverId", server_hash.into_boxed_str())])
+                .send().await.expect("Request failed.").text().await.unwrap());
+        }
+    }
+
+    #[cfg(feature = "compression")]
     con.set_compression(Some(64)).await?;
 
     con.write(&Clientbound::LoginSuccess(LoginSuccess {

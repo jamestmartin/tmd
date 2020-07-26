@@ -72,6 +72,7 @@ impl Connection<Handshake> {
 }
 
 impl Connection<Login> {
+    #[cfg(feature = "compression")]
     pub async fn set_compression(&mut self, threshold: Option<u32>) -> io::Result<()> {
         use crate::net::connection::packet_format::compressed::CompressedPacketFormat;
         use crate::net::serialize::VarInt;
@@ -99,6 +100,7 @@ impl Connection<Login> {
 
     /// WARNING: This function is not idempontent.
     /// Calling it twice will result in the underlying stream getting encrypted twice.
+    #[cfg(feature = "encryption")]
     pub fn set_encryption(self, secret: &[u8]) -> Result<Self, String> {
         use cfb8::Cfb8;
         use cfb8::stream_cipher::NewStreamCipher;

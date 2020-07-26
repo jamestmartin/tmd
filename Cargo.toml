@@ -7,6 +7,26 @@ repository = "https://github.com/jamestmartin/tmd"
 license = "GPL-3.0+"
 publish = false
 
+[features]
+default = ["authentication", "compression", "encryption"]
+
+# Enables authentication via Mojang's servers, i.e. online mode.
+authentication = ["encryption", "num-bigint", "sha-1", "reqwest"]
+
+# Enables protocol compression.
+compression = ["flate2"]
+
+# Enables protocol encryption *without enabling authentication*.
+#
+# The protocol itself doesn't depend on authentication to use encryption.
+# If the client and server both simply *don't* check in with Mojang,
+# then the protocol will proceed as normal, but encrypted.
+# However, be warned that there is no way to disable authentication
+# for Notchian clients (they will disconnect you from the server),
+# so a modified client would be necessary
+# to use offline encryption, and none exist that I know of.
+encryption = ["aes", "cfb8", "rand", "rsa"]
+
 [dependencies]
 async-trait = "0.1.36"
 clap = { version = "2.33.1", features = ["yaml"] }
@@ -15,14 +35,18 @@ serde_json = "1.0.56"
 tokio = { version = "0.2.22", features = ["io-util", "macros", "net", "tcp", "rt-threaded"] }
 uuid = { version = "0.8", features = ["serde"] }
 
+# Dependencies required for authentication
+# Used to format Minecraft's "server id" hash.
+num-bigint = { version = "0.3.0", optional = true }
+sha-1 = { version = "0.9.1", optional = true }
+# Used to make the request to the Mojang servers.
+reqwest = { version = "0.10.7", optional = true }
+
 # Dependencies required for compression
-flate2 = "1.0.16"
+flate2 = { version = "1.0.16", optional = true }
 
 # Dependencies required for encryption
-aes = "0.4.0"
-cfb8 = "0.4.0"
-num-bigint = "0.3.0"
-rand = "0.7.3"
-reqwest = "0.10.7"
-rsa = "0.3.0"
-sha-1 = "0.9.1"
+aes = { version = "0.4.0", optional = true }
+cfb8 = { version = "0.4.0", optional = true }
+rand = { version = "0.7.3", optional = true }
+rsa = { version = "0.3.0", optional = true }

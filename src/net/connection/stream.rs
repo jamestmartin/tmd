@@ -1,3 +1,4 @@
+#[cfg(feature = "encryption")]
 pub mod encrypted;
 
 use tokio::io::{AsyncRead, AsyncWrite};

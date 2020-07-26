@@ -1,3 +1,4 @@
+#[cfg(feature = "compression")]
 pub mod compressed;
 pub mod default;
 
