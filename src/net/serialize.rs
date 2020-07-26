@@ -142,13 +142,15 @@ macro_rules! impl_varnum {
 
             impl PacketReadable for $name {
                 fn read(deser: &mut impl PacketDeserializer) -> Result<Self, String> {
-                    let mut length = 1;
+                    let mut num_read: usize = 0;
                     let mut acc = 0;
-                    while length <= $length {
+                    while num_read < $length {
                         // If the highest bit is set, there are further bytes to be read;
                         // the rest of the bits are the actual bits of the number.
                         let read = deser.read::<u8>()?;
-                        acc |= (read & 0b01111111) as $wraps;
+                        acc |= ((read & 0b01111111) as $wraps) << num_read * 7;
+
+                        num_read += 1;
 
                         if (read & 0b10000000) == 0 {
                             // There are no more bytes.
@@ -157,7 +159,6 @@ macro_rules! impl_varnum {
 
                         // Make space for the rest of the bits.
                         acc = acc << 7;
-                        length += 1;
                     }
 
                     Err(format!("VarNum was more than {} bytes.", $length))

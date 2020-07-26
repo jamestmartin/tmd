@@ -1,14 +1,29 @@
 use async_trait::async_trait;
-use crate::net::{Reader, Writer};
-use crate::net::connection::packet_format::{PacketFormat, MAX_CLIENT_PACKET_SIZE, read_varint};
+use crate::net::connection::packet_format::
+    {PacketFormat, Reader, Writer, MAX_PACKET_SIZE, read_varint};
 use std::boxed::Box;
 use std::io;
-use tokio::io::AsyncReadExt;
 
 pub struct DefaultPacketFormat;
 
 #[async_trait]
 impl PacketFormat for DefaultPacketFormat {
+    async fn recieve(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
+        use tokio::io::AsyncReadExt;
+
+        let (_, length) = read_varint(src).await?;
+        if length > MAX_PACKET_SIZE as i32 {
+            return Err(io::Error::new(io::ErrorKind::Other, "Packet was too long.".to_string()));
+        }
+        let length = length as usize;
+
+        let mut buf = Vec::with_capacity(length);
+        buf.resize(length, 0);
+        src.read_exact(buf.as_mut_slice()).await?;
+
+        Ok(buf.into_boxed_slice())
+    }
+
     async fn send(&self, dest: &mut Writer, data: &[u8]) -> io::Result<()> {
         use crate::net::serialize::{PacketSerializer, VarInt};
 
@@ -24,19 +39,5 @@ impl PacketFormat for DefaultPacketFormat {
         }
 
         Ok(())
-    }
-
-    async fn recieve(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
-        let (_, length) = read_varint(src).await?;
-        if length > MAX_CLIENT_PACKET_SIZE as i32 {
-            return Err(io::Error::new(io::ErrorKind::Other, "Packet was too long.".to_string()));
-        }
-        let length = length as usize;
-
-        let mut buf = Vec::with_capacity(length);
-        buf.resize(length, 0);
-        src.read_exact(buf.as_mut_slice()).await?;
-
-        Ok(buf.into_boxed_slice())
     }
 }
