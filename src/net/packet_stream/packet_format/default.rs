@@ -1,4 +1,4 @@
-use crate::net::connection::packet_format::{read_varint, PacketFormat, Reader, Writer, MAX_PACKET_SIZE};
+use crate::net::packet_stream::packet_format::{read_varint, PacketFormat, Reader, Writer, MAX_PACKET_SIZE};
 use async_trait::async_trait;
 use std::boxed::Box;
 use std::io;

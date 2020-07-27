@@ -5,7 +5,7 @@
 mod net;
 
 use crate::net::chat::Chat;
-use crate::net::connection::Connection;
+use crate::net::packet_stream::{Client, PacketStream, PacketStreamMaps};
 use crate::net::protocol::state::handshake::Handshake;
 use crate::net::protocol::state::login::Login;
 use crate::net::protocol::state::play::Play;
@@ -55,7 +55,7 @@ async fn listen(mut listener: TcpListener) {
 }
 
 async fn accept_connection(socket: TcpStream) {
-    let con = Connection::new(socket);
+    let con = PacketStream::new(Box::new(socket));
 
     eprintln!("Client connected.");
     match interact_handshake(con).await {
@@ -72,10 +72,10 @@ fn mk_err<A, S: std::borrow::Borrow<str>>(str: S) -> io::Result<A> {
     Err(io::Error::new(io::ErrorKind::Other, str.borrow().to_string()))
 }
 
-async fn interact_handshake(mut con: Connection<Handshake>) -> io::Result<()> {
+async fn interact_handshake(mut con: PacketStream<Client, Handshake>) -> io::Result<()> {
     use crate::net::protocol::state::handshake::*;
 
-    match con.read().await? {
+    match con.recieve().await? {
         Serverbound::HandshakePkt(handshake) => {
             use HandshakeNextState::*;
 
@@ -87,13 +87,13 @@ async fn interact_handshake(mut con: Connection<Handshake>) -> io::Result<()> {
     }
 }
 
-async fn interact_status(mut con: Connection<Status>) -> io::Result<()> {
+async fn interact_status(mut con: PacketStream<Client, Status>) -> io::Result<()> {
     use crate::net::protocol::state::status::*;
 
     loop {
-        match con.read().await? {
+        match con.recieve().await? {
             Serverbound::Request(Request {}) => {
-                con.write(&Clientbound::Response(Response {
+                con.send(&Clientbound::Response(Response {
                     data: ResponseData {
                         version: ResponseVersion {
                             name: "1.16.1".to_string(),
@@ -113,7 +113,7 @@ async fn interact_status(mut con: Connection<Status>) -> io::Result<()> {
                 .await?;
             },
             Serverbound::Ping(ping) => {
-                con.write(&Clientbound::Pong(Pong { payload: ping.payload })).await?;
+                con.send(&Clientbound::Pong(Pong { payload: ping.payload })).await?;
 
                 // The status ping is now over so the server ends the connection.
                 return Ok(());
@@ -122,13 +122,13 @@ async fn interact_status(mut con: Connection<Status>) -> io::Result<()> {
     }
 }
 
-async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
+async fn interact_login(mut con: PacketStream<Client, Login>) -> io::Result<()> {
     use crate::net::protocol::state::login::*;
 
-    let name = match con.read().await? {
+    let name = match con.recieve().await? {
         Serverbound::LoginStart(login_start) => login_start.name,
         _ => {
-            con.write(&Clientbound::Disconnect(Disconnect {
+            con.send(&Clientbound::Disconnect(Disconnect {
                 reason: Chat {
                     text: "Unexpected packet (expected Login Start).".to_string(),
                 },
@@ -164,14 +164,14 @@ async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
 
         let server_id = "";
 
-        con.write(&Clientbound::EncryptionRequest(EncryptionRequest {
+        con.send(&Clientbound::EncryptionRequest(EncryptionRequest {
             server_id: server_id.to_string().into_boxed_str(),
             public_key: public_key.clone().into_boxed_slice(),
             verify_token: verify_token.clone().into_boxed_slice(),
         }))
         .await?;
 
-        let secret = match con.read().await? {
+        let secret = match con.recieve().await? {
             Serverbound::EncryptionResponse(encryption_response) => {
                 let token = key
                     .decrypt(PaddingScheme::PKCS1v15Encrypt, &encryption_response.verify_token)
@@ -188,7 +188,7 @@ async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
             },
         };
 
-        con = con.set_encryption(&secret).expect("Failed to set encryption.");
+        con.enable_encryption(&secret).expect("Failed to set encryption.");
 
         #[cfg(feature = "authentication")]
         {
@@ -224,9 +224,15 @@ async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
     }
 
     #[cfg(feature = "compression")]
-    con.set_compression(Some(64)).await?;
+    {
+        con.send(&Clientbound::SetCompression(SetCompression {
+            threshold: crate::net::serialize::VarInt(64),
+        }))
+        .await?;
+        con.set_compression(Some(64));
+    }
 
-    con.write(&Clientbound::LoginSuccess(LoginSuccess {
+    con.send(&Clientbound::LoginSuccess(LoginSuccess {
         uuid: uuid::Uuid::nil(),
         username: name,
     }))
@@ -235,10 +241,10 @@ async fn interact_login(mut con: Connection<Login>) -> io::Result<()> {
     interact_play(con.into_play()).await
 }
 
-async fn interact_play(mut con: Connection<Play>) -> io::Result<()> {
+async fn interact_play(mut con: PacketStream<Client, Play>) -> io::Result<()> {
     use crate::net::protocol::state::play::*;
 
-    con.write(&Clientbound::Disconnect(Disconnect {
+    con.send(&Clientbound::Disconnect(Disconnect {
         reason: Chat {
             text: "Goodbye!".to_string(),
         },

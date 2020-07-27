@@ -1,17 +1,10 @@
-use crate::net::connection::packet_format::{read_varint, PacketFormat, Reader, Writer, MAX_PACKET_SIZE};
+use crate::net::packet_stream::packet_format::{read_varint, PacketFormat, Reader, Writer, MAX_PACKET_SIZE};
 use async_trait::async_trait;
 use std::boxed::Box;
 use std::io;
 
-pub struct CompressedPacketFormat {
-    threshold: usize,
-}
-
-impl CompressedPacketFormat {
-    pub fn new(threshold: usize) -> Self {
-        Self { threshold }
-    }
-}
+#[repr(transparent)]
+pub struct CompressedPacketFormat(pub usize);
 
 // A compressed header is in this format:
 //
@@ -76,7 +69,7 @@ impl PacketFormat for CompressedPacketFormat {
 
         // If the length of the uncompressed data exceeds the threshold,
         // then we will compress this packet.
-        if data.len() >= self.threshold {
+        if data.len() >= self.0 {
             // Now we compress the data.
             use flate2::{Compress, FlushCompress};
 

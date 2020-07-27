@@ -5,4 +5,3 @@ newline_style = "Native"
 normalize_comments = true
 normalize_doc_attributes = true
 use_try_shorthand = true
-wrap_comments = true

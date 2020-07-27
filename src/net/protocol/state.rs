@@ -5,7 +5,7 @@ pub mod status;
 
 use crate::net::protocol::packet_map::PacketMap;
 
-pub trait ProtocolState {
+pub trait ProtocolState: Send + Sync {
     type Clientbound: PacketMap;
     type Serverbound: PacketMap;
 }
