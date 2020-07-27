@@ -20,7 +20,7 @@ pub struct CompressedPacketFormat(pub usize);
 
 #[async_trait]
 impl PacketFormat for CompressedPacketFormat {
-    async fn recieve(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
+    async fn receive(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
         use tokio::io::AsyncReadExt;
 
         // First we read in the packet and uncompressed data lengths.
@@ -42,7 +42,7 @@ impl PacketFormat for CompressedPacketFormat {
         }
         let data_length = data_length as usize;
 
-        // Now we recieve the remainder of the packet's data.
+        // Now we receive the remainder of the packet's data.
         let mut data = Vec::with_capacity(packet_length - data_length_size);
         data.resize(packet_length, 0);
         src.read_exact(data.as_mut_slice()).await?;

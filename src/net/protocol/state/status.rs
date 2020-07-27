@@ -6,14 +6,14 @@ use uuid::Uuid;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ResponseVersion {
-    pub name: String,
+    pub name: Box<str>,
     pub protocol: u32,
 }
 impl PacketJson for ResponseVersion {}
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ResponsePlayersSample {
-    pub name: String,
+    pub name: Box<str>,
     pub id: Uuid,
 }
 impl PacketJson for ResponsePlayersSample {}
@@ -32,7 +32,7 @@ pub struct ResponseData {
     pub players: ResponsePlayers,
     pub description: Chat,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub favicon: Option<String>,
+    pub favicon: Option<Box<str>>,
 }
 impl PacketJson for ResponseData {}
 

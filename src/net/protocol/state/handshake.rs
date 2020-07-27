@@ -33,7 +33,7 @@ impl PacketWritable for &HandshakeNextState {
 define_packets! {
     packet HandshakePkt {
         protocol_version: VarInt,
-        server_address: String,
+        server_address: Box<str>,
         server_port: u16,
         next_state: HandshakeNextState
     }

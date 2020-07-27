@@ -7,7 +7,7 @@ pub struct DefaultPacketFormat;
 
 #[async_trait]
 impl PacketFormat for DefaultPacketFormat {
-    async fn recieve(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
+    async fn receive(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
         use tokio::io::AsyncReadExt;
 
         let (_, length) = read_varint(src).await?;

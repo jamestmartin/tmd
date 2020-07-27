@@ -1,14 +1,15 @@
+#[cfg(feature = "encryption")]
+mod encryption;
 mod packet_format;
-mod stream;
 
 use crate::net::packet_stream::packet_format::{AutoPacketFormat, PacketFormat};
-use crate::net::packet_stream::stream::Stream;
 use crate::net::protocol::packet_map::PacketMap;
 use crate::net::protocol::state::handshake::Handshake;
 use crate::net::protocol::state::login::Login;
 use crate::net::protocol::state::play::Play;
 use crate::net::protocol::state::status::Status;
 use crate::net::protocol::state::ProtocolState;
+use crate::net::Stream;
 use async_trait::async_trait;
 use std::io;
 use std::marker::PhantomData;
@@ -47,7 +48,7 @@ pub type SharedSecret = !;
 /// A stream of packets.
 ///
 /// The type parameters are used to ensure using the type system
-/// that you can only send and recieve the correct type of packets.
+/// that you can only send and receive the correct type of packets.
 pub struct PacketStream<Rem: Remote, St: ProtocolState> {
     inner: Box<dyn Stream>,
     compression_threshold: Option<CompressionThreshold>,
@@ -78,7 +79,7 @@ impl<Rem: Remote, St: ProtocolState> PacketStream<Rem, St> {
     /// so it should only be used internally.
     ///
     /// The purpose of this function is to reduce code duplication
-    /// while implementing [`PacketStreamMaps`]'s send and recieve;
+    /// while implementing [`PacketStreamMaps`]'s send and receive;
     /// the sending and recieving code is always going to be the same,
     /// but due to some shortcomings of Rust's type system
     /// (specifically, because there's no way to approximate type-level functions;
@@ -93,22 +94,22 @@ impl<Rem: Remote, St: ProtocolState> PacketStream<Rem, St> {
             .await
     }
 
-    /// Recieve any packet from the stream, ignoring the declared ProtocolState.
+    /// Receive any packet from the stream, ignoring the declared ProtocolState.
     /// This can be used to break PacketStream's type-enforced correctness guarantees,
     /// so it should only be used internally.
     ///
     /// The purpose of this function is to reduce code duplication
-    /// while implementing [`PacketStreamMaps`]'s send and recieve;
+    /// while implementing [`PacketStreamMaps`]'s send and receive;
     /// the sending and recieving code is always going to be the same,
     /// but due to some shortcomings of Rust's type system
     /// (specifically, because there's no way to approximate type-level functions;
     /// in Haskell you could use multi-parameter type classes or type families),
     /// we can't implement this generically safely over Remote/ProtocolState combinations.
-    async fn recieve_generic<Pkt: PacketMap>(&mut self) -> io::Result<Pkt> {
+    async fn receive_generic<Pkt: PacketMap>(&mut self) -> io::Result<Pkt> {
         use crate::net::serialize::VecPacketDeserializer;
 
         let buf = AutoPacketFormat(self.compression_threshold)
-            .recieve(&mut self.inner)
+            .receive(&mut self.inner)
             .await?;
 
         Pkt::read(&mut VecPacketDeserializer::new(buf.as_ref()))
@@ -127,13 +128,13 @@ impl<Rem: Remote, St: ProtocolState> PacketStream<Rem, St> {
 /// which are determined by the protocol state and remote.
 #[async_trait]
 pub trait PacketStreamMaps: Sealed {
-    /// The kind of packets that can be recieved from the remote.
+    /// The kind of packets that can be received from the remote.
     type Inbound: PacketMap;
     /// The kind of packets that can be sent to the remote.
     type Outbound: PacketMap;
 
-    /// Recieve a packet from the remote.
-    async fn recieve(&mut self) -> io::Result<Self::Inbound>;
+    /// Receive a packet from the remote.
+    async fn receive(&mut self) -> io::Result<Self::Inbound>;
 
     /// Send a packet to the remote.
     async fn send(&mut self, pkt: &Self::Outbound) -> io::Result<()>;
@@ -145,8 +146,8 @@ impl<St: ProtocolState> PacketStreamMaps for PacketStream<Client, St> {
     type Inbound = St::Serverbound;
     type Outbound = St::Clientbound;
 
-    async fn recieve(&mut self) -> io::Result<Self::Inbound> {
-        self.recieve_generic().await
+    async fn receive(&mut self) -> io::Result<Self::Inbound> {
+        self.receive_generic().await
     }
 
     async fn send(&mut self, pkt: &Self::Outbound) -> io::Result<()> {
@@ -160,8 +161,8 @@ impl<St: ProtocolState> PacketStreamMaps for PacketStream<Server, St> {
     type Inbound = St::Clientbound;
     type Outbound = St::Serverbound;
 
-    async fn recieve(&mut self) -> io::Result<Self::Inbound> {
-        self.recieve_generic().await
+    async fn receive(&mut self) -> io::Result<Self::Inbound> {
+        self.receive_generic().await
     }
 
     async fn send(&mut self, pkt: &Self::Outbound) -> io::Result<()> {
@@ -221,7 +222,7 @@ impl<Rem: Remote> PacketStream<Rem, Login> {
 
         #[cfg(feature = "encryption")]
         {
-            use crate::net::packet_stream::stream::encrypted::EncryptedStream;
+            use crate::net::packet_stream::encryption::EncryptedStream;
             use cfb8::stream_cipher::NewStreamCipher;
             use cfb8::Cfb8;
 

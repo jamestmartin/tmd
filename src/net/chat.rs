@@ -3,5 +3,5 @@ use serde::{Deserialize, Serialize};
 // TODO: Support more features.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Chat {
-    pub text: String,
+    pub text: Box<str>,
 }

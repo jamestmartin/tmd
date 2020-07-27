@@ -14,9 +14,9 @@ pub type Writer = dyn AsyncWrite + Unpin + Send;
 /// A packet format describes how to read a packet header and retrieve its data.
 #[async_trait]
 pub trait PacketFormat: Send + Sync {
-    /// Recieve the bytes of a packet's body (its id and header) from the provided stream.
+    /// Receive the bytes of a packet's body (its id and header) from the provided stream.
     /// This involves reading the packet header and performing decompression if necessary.
-    async fn recieve(&self, src: &mut Reader) -> io::Result<Box<[u8]>>;
+    async fn receive(&self, src: &mut Reader) -> io::Result<Box<[u8]>>;
 
     /// Send the bytes of a packet's body (its id and header) through the provided stream.
     /// This involves writing the packet header and performing compression if necessary.
@@ -27,16 +27,16 @@ pub struct AutoPacketFormat(pub Option<CompressionThreshold>);
 
 #[async_trait]
 impl PacketFormat for AutoPacketFormat {
-    async fn recieve(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
+    async fn receive(&self, src: &mut Reader) -> io::Result<Box<[u8]>> {
         match self.0 {
             #[cfg(not(feature = "compression"))]
             Some(x) => x,
             #[cfg(feature = "compression")]
             Some(threshold) => {
                 use crate::net::packet_stream::packet_format::compressed::CompressedPacketFormat;
-                CompressedPacketFormat(threshold).recieve(src).await
+                CompressedPacketFormat(threshold).receive(src).await
             },
-            None => DefaultPacketFormat.recieve(src).await,
+            None => DefaultPacketFormat.receive(src).await,
         }
     }
 
@@ -54,7 +54,7 @@ impl PacketFormat for AutoPacketFormat {
     }
 }
 
-/// A completely arbitrary limitation on the maximum size of a recieved packet.
+/// A completely arbitrary limitation on the maximum size of a received packet.
 pub const MAX_PACKET_SIZE: usize = 35565;
 
 async fn read_varint(src: &mut Reader) -> io::Result<(usize, i32)> {
