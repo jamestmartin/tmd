@@ -5,7 +5,7 @@ use cfb8::Cfb8;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
-use tokio::io::{AsyncRead, AsyncWrite, Result};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, Result};
 
 pub struct EncryptedStream {
     rw: Box<dyn Stream>,
@@ -46,13 +46,13 @@ impl EncryptedStream {
 }
 
 impl AsyncRead for EncryptedStream {
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]) -> Poll<Result<usize>> {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut ReadBuf) -> Poll<Result<()>> {
         let me = Pin::into_inner(self);
 
         match Pin::new(&mut me.rw).poll_read(cx, buf) {
-            Poll::Ready(Ok(bytes)) => {
-                me.cipher.decrypt(&mut buf[..bytes]);
-                Poll::Ready(Ok(bytes))
+            Poll::Ready(Ok(())) => {
+                me.cipher.decrypt(buf.filled_mut());
+                Poll::Ready(Ok(()))
             },
             other => other,
         }
