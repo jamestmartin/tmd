@@ -1,6 +1,6 @@
 use crate::net::Stream;
 use aes::Aes128;
-use cfb8::stream_cipher::StreamCipher;
+use cfb8::cipher::stream::StreamCipher;
 use cfb8::Cfb8;
 use std::pin::Pin;
 use std::task::Context;

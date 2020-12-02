@@ -193,7 +193,7 @@ impl<Rem: Remote> PacketStream<Rem, Handshake> {
 }
 
 #[cfg(feature = "encryption")]
-pub type InvalidKeyNonceLength = cfb8::stream_cipher::InvalidKeyNonceLength;
+pub type InvalidKeyNonceLength = cfb8::cipher::stream::InvalidKeyNonceLength;
 #[cfg(not(feature = "encryption"))]
 pub type InvalidKeyNonceLength = !;
 
@@ -223,7 +223,7 @@ impl<Rem: Remote> PacketStream<Rem, Login> {
         #[cfg(feature = "encryption")]
         {
             use crate::net::packet_stream::encryption::EncryptedStream;
-            use cfb8::stream_cipher::NewStreamCipher;
+            use cfb8::cipher::stream::NewStreamCipher;
             use cfb8::Cfb8;
 
             let cipher: Cfb8<aes::Aes128> = Cfb8::new_var(shared_secret, shared_secret)?;
