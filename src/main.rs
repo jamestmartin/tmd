@@ -34,7 +34,7 @@ async fn main() -> io::Result<()> {
     Ok(())
 }
 
-async fn listen(mut listener: TcpListener) {
+async fn listen(listener: TcpListener) {
     loop {
         let (socket, _) = match listener.accept().await {
             Ok(x) => x,

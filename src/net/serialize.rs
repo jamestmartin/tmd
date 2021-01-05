@@ -133,8 +133,8 @@ macro_rules! impl_varnum {
                 fn from(x: $wraps) -> Self { $name(x) }
             }
 
-            impl Into<$wraps> for $name {
-                fn into(self) -> $wraps { self.0 }
+            impl From<$name> for $wraps {
+                fn from(x: $name) -> Self { x.0 }
             }
 
             impl PacketReadable for $name {
